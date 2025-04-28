@@ -1,0 +1,32 @@
+{
+  "name": "w-data-syncer",
+  "version": "1.0.0",
+  "main": "dist/w-data-syncer.umd.js",
+  "dependencies": {
+    "lodash-es": "^4.17.21",
+    "w-data-csv": "^1.0.10",
+    "wsemi": "^1.7.89"
+  },
+  "devDependencies": {
+    "w-orm-lowdb": "^1.0.1",
+    "w-package-tools": "^1.0.87"
+  },
+  "scripts": {
+    "test": "mocha --parallel --timeout 60000",
+    "deploy": "gh-pages -d docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuda-lyu/w-data-syncer.git"
+  },
+  "keywords": [
+    "package",
+    "tool",
+    "detect",
+    "sync",
+    "data",
+    "nodejs"
+  ],
+  "author": "yuda-lyu(semisphere)",
+  "license": "MIT"
+}
