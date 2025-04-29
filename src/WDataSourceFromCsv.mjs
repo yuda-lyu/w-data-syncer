@@ -1,6 +1,9 @@
 import path from 'path'
 import fs from 'fs'
 import get from 'lodash-es/get.js'
+import each from 'lodash-es/each.js'
+import map from 'lodash-es/map.js'
+import keys from 'lodash-es/keys.js'
 import size from 'lodash-es/size.js'
 import join from 'lodash-es/join.js'
 import evem from 'wsemi/src/evem.mjs'
@@ -53,6 +56,20 @@ function WDataSourceFromCsv(fd, opt = {}) {
         //ltdt
         let ltdt = await wdc.parseCsv(c)
         // console.log('ltdt', ltdt)
+
+        //偵測是否有無head欄位
+        if (true) {
+            let ks = keys(get(ltdt, 0))
+            if (size(ks) !== size(heads)) {
+                ltdt = map(ltdt, (dt) => {
+                    let _dt = {}
+                    each(heads, (k) => {
+                        _dt[k] = get(dt, k, '')
+                    })
+                    return _dt
+                })
+            }
+        }
 
         return ltdt
     }

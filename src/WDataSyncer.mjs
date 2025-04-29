@@ -71,6 +71,10 @@ function WDataSyncer(src, tar, opt = {}) {
                 }
                 return
             }
+            if (useShowLog) {
+                console.log(`size(ltdtSrc)`, size(ltdtSrc))
+                console.log(`size(ltdtTar)`, size(ltdtTar))
+            }
 
             //arrSort
             if (useShowLog) {
