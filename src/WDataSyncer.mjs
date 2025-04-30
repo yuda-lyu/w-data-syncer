@@ -1,6 +1,7 @@
 import get from 'lodash-es/get.js'
 import map from 'lodash-es/map.js'
 import size from 'lodash-es/size.js'
+import sortBy from 'lodash-es/sortBy.js'
 import evem from 'wsemi/src/evem.mjs'
 import genPm from 'wsemi/src/genPm.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
@@ -8,7 +9,6 @@ import ispint from 'wsemi/src/ispint.mjs'
 import isearr from 'wsemi/src/isearr.mjs'
 import isbol from 'wsemi/src/isbol.mjs'
 import cint from 'wsemi/src/cint.mjs'
-import arrSort from 'wsemi/src/arrSort.mjs'
 import ltdtDiffByKey from 'wsemi/src/ltdtDiffByKey.mjs'
 
 
@@ -102,14 +102,14 @@ function WDataSyncer(src, tar, opt = {}) {
                 console.log(`size(ltdtTar)`, size(ltdtTar))
             }
 
-            //arrSort
+            //sortBy
             if (useShowLog) {
-                console.log('arrSort...')
+                console.log('sortBy...')
             }
-            ltdtSrc = arrSort(ltdtSrc, { compareKey: key, localeCompare: true })
-            ltdtTar = arrSort(ltdtTar, { compareKey: key, localeCompare: true })
+            ltdtSrc = sortBy(ltdtSrc, key)
+            ltdtTar = sortBy(ltdtTar, key)
             if (useShowLog) {
-                console.log('arrSort done')
+                console.log('sortBy done')
             }
 
             //排序與建立map比對
