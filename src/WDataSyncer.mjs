@@ -1,6 +1,7 @@
 import get from 'lodash-es/get.js'
 import size from 'lodash-es/size.js'
 import evem from 'wsemi/src/evem.mjs'
+import genPm from 'wsemi/src/genPm.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import ispint from 'wsemi/src/ispint.mjs'
 import isearr from 'wsemi/src/isearr.mjs'
@@ -34,6 +35,30 @@ function WDataSyncer(src, tar, opt = {}) {
         timeInterval = 20000
     }
     timeInterval = cint(timeInterval)
+
+    //waitEmitInsert
+    let waitEmitInsert = get(opt, 'waitEmitInsert')
+    if (!isbol(waitEmitInsert)) {
+        waitEmitInsert = false
+    }
+
+    //waitEmitSave
+    let waitEmitSave = get(opt, 'waitEmitSave')
+    if (!isbol(waitEmitSave)) {
+        waitEmitSave = false
+    }
+
+    //waitDel
+    let waitDel = get(opt, 'waitDel')
+    if (!isbol(waitDel)) {
+        waitDel = false
+    }
+
+    //waitEmitChange
+    let waitEmitChange = get(opt, 'waitEmitChange')
+    if (!isbol(waitEmitChange)) {
+        waitEmitChange = false
+    }
 
     //useShowLog
     let useShowLog = get(opt, 'useShowLog')
@@ -104,24 +129,75 @@ function WDataSyncer(src, tar, opt = {}) {
                     console.log('r.add', r.add[0], size(r.add))
                 }
                 await tar.insert(r.add)
-                ev.emit('insert', r.add)
-                ev.emit('change', { type: 'insert', items: r.add })
+
+                if (waitEmitInsert) {
+                    let pm = genPm()
+                    ev.emit('insert', r.add, pm)
+                    await pm
+                }
+                else {
+                    ev.emit('insert', r.add)
+                }
+
+                if (waitEmitChange) {
+                    let pm = genPm()
+                    ev.emit('change', { type: 'insert', items: r.add }, pm)
+                    await pm
+                }
+                else {
+                    ev.emit('change', { type: 'insert', items: r.add })
+                }
+
             }
             if (size(r.diff) > 0) {
                 if (useShowLog) {
                     console.log('r.diff', r.diff[0], size(r.diff))
                 }
                 await tar.save(r.diff)
-                ev.emit('save', r.diff)
-                ev.emit('change', { type: 'save', items: r.diff })
+
+                if (waitEmitSave) {
+                    let pm = genPm()
+                    ev.emit('save', r.diff, pm)
+                    await pm
+                }
+                else {
+                    ev.emit('save', r.diff)
+                }
+
+                if (waitEmitChange) {
+                    let pm = genPm()
+                    ev.emit('change', { type: 'save', items: r.diff }, pm)
+                    await pm
+                }
+                else {
+                    ev.emit('change', { type: 'save', items: r.diff })
+                }
+
             }
             if (size(r.del) > 0) {
                 if (useShowLog) {
                     console.log('r.del', r.del[0], size(r.del))
                 }
                 await tar.del(r.del)
-                ev.emit('del', r.del)
-                ev.emit('change', { type: 'del', items: r.del })
+
+                if (waitDel) {
+                    let pm = genPm()
+                    ev.emit('del', r.del, pm)
+                    await pm
+                }
+                else {
+                    ev.emit('del', r.del)
+                }
+
+                if (waitEmitChange) {
+                    let pm = genPm()
+                    ev.emit('change', { type: 'del', items: r.del }, pm)
+                    await pm
+                }
+                else {
+                    ev.emit('change', { type: 'del', items: r.del })
+                }
+
             }
             if (useShowLog) {
                 console.log('deal done')
@@ -143,7 +219,7 @@ function WDataSyncer(src, tar, opt = {}) {
         //check
         if (lock) {
             if (useShowLog) {
-                console.log('lcoking...')
+                console.log('locking...')
             }
             return
         }
