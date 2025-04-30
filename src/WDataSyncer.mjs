@@ -137,7 +137,17 @@ function WDataSyncer(src, tar, opt = {}) {
     }
 
     //timer
+    let lock = false
     let timer = setInterval(() => {
+
+        //check
+        if (lock) {
+            if (useShowLog) {
+                console.log('lcoking...')
+            }
+            return
+        }
+        lock = true
 
         //compareAndSync
         if (useShowLog) {
@@ -154,6 +164,7 @@ function WDataSyncer(src, tar, opt = {}) {
                 if (useShowLog) {
                     console.log('compareAndSync done')
                 }
+                lock = false
             })
 
     }, timeInterval)
