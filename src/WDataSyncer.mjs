@@ -61,6 +61,12 @@ function WDataSyncer(src, tar, opt = {}) {
         waitEmitChange = false
     }
 
+    //waitEmitChangeAll
+    let waitEmitChangeAll = get(opt, 'waitEmitChangeAll')
+    if (!isbol(waitEmitChangeAll)) {
+        waitEmitChangeAll = false
+    }
+
     //useShowLog
     let useShowLog = get(opt, 'useShowLog')
     if (!isbol(useShowLog)) {
@@ -75,7 +81,13 @@ function WDataSyncer(src, tar, opt = {}) {
         try {
 
             //ltdtSrc
+            if (useShowLog) {
+                console.log(`src select...`)
+            }
             let ltdtSrc = await src.select()
+            if (useShowLog) {
+                console.log(`src select done`)
+            }
             // console.log('ltdtSrc', ltdtSrc)
 
             //check
@@ -87,7 +99,13 @@ function WDataSyncer(src, tar, opt = {}) {
             }
 
             //ltdtTar
+            if (useShowLog) {
+                console.log(`tar select...`)
+            }
             let ltdtTar = await tar.select()
+            if (useShowLog) {
+                console.log(`tar select done`)
+            }
             // console.log('ltdtTar', ltdtTar)
 
             //check
@@ -122,12 +140,16 @@ function WDataSyncer(src, tar, opt = {}) {
             }
             // console.log('r', r)
 
+            let nAdd = size(r.add)
+            let nDiff = size(r.diff)
+            let nDel = size(r.del)
+
             if (useShowLog) {
                 console.log('operate and emit...')
             }
-            if (size(r.add) > 0) {
+            if (nAdd > 0) {
                 if (useShowLog) {
-                    console.log('r.add', map(r.add, key), size(r.add))
+                    console.log('r.add', map(r.add, key), nAdd)
                 }
                 await tar.insert(r.add)
 
@@ -152,9 +174,9 @@ function WDataSyncer(src, tar, opt = {}) {
                 }
 
             }
-            if (size(r.diff) > 0) {
+            if (nDiff > 0) {
                 if (useShowLog) {
-                    console.log('r.diff', map(r.diff, key), size(r.diff))
+                    console.log('r.diff', map(r.diff, key), nDiff)
                 }
                 await tar.save(r.diff)
 
@@ -179,9 +201,9 @@ function WDataSyncer(src, tar, opt = {}) {
                 }
 
             }
-            if (size(r.del) > 0) {
+            if (nDel > 0) {
                 if (useShowLog) {
-                    console.log('r.del', map(r.del, key), size(r.del))
+                    console.log('r.del', map(r.del, key), nDel)
                 }
                 await tar.del(r.del)
 
@@ -203,6 +225,19 @@ function WDataSyncer(src, tar, opt = {}) {
                 }
                 else {
                     ev.emit('change', { type: 'del', items: r.del })
+                }
+
+            }
+            if ((nAdd + nDiff + nDel) > 0) {
+
+                if (waitEmitChangeAll) {
+                    let pm = genPm()
+                    ev.emit('change-all', r, pm)
+                    await pm
+                        .catch(() => {})
+                }
+                else {
+                    ev.emit('change-all', r)
                 }
 
             }
