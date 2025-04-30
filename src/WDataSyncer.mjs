@@ -1,4 +1,5 @@
 import get from 'lodash-es/get.js'
+import map from 'lodash-es/map.js'
 import size from 'lodash-es/size.js'
 import evem from 'wsemi/src/evem.mjs'
 import genPm from 'wsemi/src/genPm.mjs'
@@ -122,11 +123,11 @@ function WDataSyncer(src, tar, opt = {}) {
             // console.log('r', r)
 
             if (useShowLog) {
-                console.log('deal...')
+                console.log('operate and emit...')
             }
             if (size(r.add) > 0) {
                 if (useShowLog) {
-                    console.log('r.add', r.add[0], size(r.add))
+                    console.log('r.add', map(r.add, key), size(r.add))
                 }
                 await tar.insert(r.add)
 
@@ -153,7 +154,7 @@ function WDataSyncer(src, tar, opt = {}) {
             }
             if (size(r.diff) > 0) {
                 if (useShowLog) {
-                    console.log('r.diff', r.diff[0], size(r.diff))
+                    console.log('r.diff', map(r.diff, key), size(r.diff))
                 }
                 await tar.save(r.diff)
 
@@ -180,7 +181,7 @@ function WDataSyncer(src, tar, opt = {}) {
             }
             if (size(r.del) > 0) {
                 if (useShowLog) {
-                    console.log('r.del', r.del[0], size(r.del))
+                    console.log('r.del', map(r.del, key), size(r.del))
                 }
                 await tar.del(r.del)
 
@@ -206,7 +207,7 @@ function WDataSyncer(src, tar, opt = {}) {
 
             }
             if (useShowLog) {
-                console.log('deal done')
+                console.log('operate and emit done')
             }
 
         }
