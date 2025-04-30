@@ -134,6 +134,7 @@ function WDataSyncer(src, tar, opt = {}) {
                     let pm = genPm()
                     ev.emit('insert', r.add, pm)
                     await pm
+                        .catch(() => {})
                 }
                 else {
                     ev.emit('insert', r.add)
@@ -143,6 +144,7 @@ function WDataSyncer(src, tar, opt = {}) {
                     let pm = genPm()
                     ev.emit('change', { type: 'insert', items: r.add }, pm)
                     await pm
+                        .catch(() => {})
                 }
                 else {
                     ev.emit('change', { type: 'insert', items: r.add })
@@ -159,6 +161,7 @@ function WDataSyncer(src, tar, opt = {}) {
                     let pm = genPm()
                     ev.emit('save', r.diff, pm)
                     await pm
+                        .catch(() => {})
                 }
                 else {
                     ev.emit('save', r.diff)
@@ -168,6 +171,7 @@ function WDataSyncer(src, tar, opt = {}) {
                     let pm = genPm()
                     ev.emit('change', { type: 'save', items: r.diff }, pm)
                     await pm
+                        .catch(() => {})
                 }
                 else {
                     ev.emit('change', { type: 'save', items: r.diff })
@@ -184,6 +188,7 @@ function WDataSyncer(src, tar, opt = {}) {
                     let pm = genPm()
                     ev.emit('del', r.del, pm)
                     await pm
+                        .catch(() => {})
                 }
                 else {
                     ev.emit('del', r.del)
@@ -193,6 +198,7 @@ function WDataSyncer(src, tar, opt = {}) {
                     let pm = genPm()
                     ev.emit('change', { type: 'del', items: r.del }, pm)
                     await pm
+                        .catch(() => {})
                 }
                 else {
                     ev.emit('change', { type: 'del', items: r.del })
