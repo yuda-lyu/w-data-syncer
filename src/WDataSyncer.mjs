@@ -1,4 +1,5 @@
 import get from 'lodash-es/get.js'
+import each from 'lodash-es/each.js'
 import map from 'lodash-es/map.js'
 import size from 'lodash-es/size.js'
 import sortBy from 'lodash-es/sortBy.js'
@@ -9,6 +10,7 @@ import ispint from 'wsemi/src/ispint.mjs'
 import isearr from 'wsemi/src/isearr.mjs'
 import isbol from 'wsemi/src/isbol.mjs'
 import cint from 'wsemi/src/cint.mjs'
+import haskey from 'wsemi/src/haskey.mjs'
 import ltdtDiffByKey from 'wsemi/src/ltdtDiffByKey.mjs'
 
 
@@ -229,6 +231,28 @@ function WDataSyncer(src, tar, opt = {}) {
 
             }
             if ((nAdd + nDiff + nDel) > 0) {
+
+                //更改type
+                if (true) {
+                    let kp = {
+                        add: 'insert',
+                        diff: 'save',
+                        del: 'del',
+                        same: 'same',
+                    }
+                    let _r = {}
+                    each(r, (ltdt, type) => {
+                        if (haskey(kp, type)) {
+                            type = kp[type]
+                        }
+                        else {
+                            console.log('kp', kp)
+                            throw new Error(`invalid type[${type}]`)
+                        }
+                        _r[type] = ltdt
+                    })
+                    r = _r
+                }
 
                 if (waitEmitChangeAll) {
                     let pm = genPm()

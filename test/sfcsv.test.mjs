@@ -30,13 +30,13 @@ describe('sfcsv', function() {
             let ctn = tn.format('YYYY-MM-DDTHH:mm:ss')
             let c = `${ctn}, ${123 + (i + 1) / 1000}\n`
             fs.appendFileSync(`${fdSrc}/h${h}.csv`, c, 'utf8')
-            console.log('push data', `i=${i}, n=${n}`)
+            // console.log('push data', `i=${i}, n=${n}`)
             ms_trigger.push({ 'push data': `i=${i}, n=${n}` })
             if (h === 0 && n === 4) {
                 let c = fs.readFileSync(`${fdSrc}/h${h}.csv`, 'utf8')
                 c = c.replace(`2020-01-01T00:02:00, 123.003`, `2020-01-01T00:02:00, 234.903`)
                 fs.writeFileSync(`${fdSrc}/h${h}.csv`, c, 'utf8')
-                console.log('modify data', `i=${i}, n=${n}, 123.003->234.903`)
+                // console.log('modify data', `i=${i}, n=${n}, 123.003->234.903`)
                 ms_trigger.push({ 'modify data': `i=${i}, n=${n}, 123.003->234.903` })
             }
             if (n >= 5) {
@@ -52,7 +52,7 @@ describe('sfcsv', function() {
                     ...ms_trigger,
                     ...ms_csv,
                 ]
-                console.log('ms', ms)
+                // console.log('ms', ms)
                 pm.resolve(ms)
             }
         }, 3000)
@@ -61,7 +61,7 @@ describe('sfcsv', function() {
             key: 'time',
         })
         omSrc.on('change', (msg) => {
-            console.log('WDataSourceFromCsv change msg', msg)
+            // console.log('WDataSourceFromCsv change msg', msg)
             ms_csv.push({ 'detect data': `type[${msg.type}], data[${JSON.stringify(msg.ltdt[0])}]` })
         })
 

@@ -86,6 +86,9 @@ let test = async () => {
         console.log('WDataSyncer change msg', msg)
         ms_db.push({ 'sync data': JSON.stringify(msg) })
     })
+    ev.on('change-all', (msg) => {
+        console.log('WDataSyncer change-all msg', msg)
+    })
 
     //triggerData
     await triggerData()
