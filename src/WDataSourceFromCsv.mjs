@@ -8,6 +8,8 @@ import size from 'lodash-es/size.js'
 import join from 'lodash-es/join.js'
 import evem from 'wsemi/src/evem.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
+import isfun from 'wsemi/src/isfun.mjs'
+import ispm from 'wsemi/src/ispm.mjs'
 import fsIsFile from 'wsemi/src/fsIsFile.mjs'
 import pmQueue from 'wsemi/src/pmQueue.mjs'
 import ltdtDiffByKey from 'wsemi/src/ltdtDiffByKey.mjs'
@@ -35,6 +37,26 @@ function WDataSourceFromCsv(fd, opt = {}) {
     let key = get(opt, 'key')
     if (!isestr(key)) {
         key = 'time'
+    }
+
+    //converter
+    let converter = get(opt, 'converter')
+    if (!isfun(converter)) {
+        converter = (ltdt) => {
+            return ltdt
+        }
+    }
+
+    //getLtdtFmt
+    let getLtdtFmt = async(ltdt) => {
+        let ltdtFmt = []
+        if (true) {
+            ltdtFmt = converter(ltdt)
+            if (ispm(ltdtFmt)) {
+                ltdtFmt = await ltdtFmt
+            }
+        }
+        return ltdtFmt
     }
 
     //ev
@@ -82,23 +104,30 @@ function WDataSourceFromCsv(fd, opt = {}) {
             return
         }
 
-        //ltdtNew
-        let ltdtNew = await readCsv(fp)
-        // console.log('ltdtNew', ltdtNew)
-
         //fn
         let fn = path.basename(fp)
+        // console.log('fn', fn)
 
         //check
         if (memory.has(fn)) {
             throw new Error(`fn[${fn}] existed`)
         }
 
+        //ltdtNew
+        let ltdtNew = await readCsv(fp)
+        // console.log('ltdtNew', ltdtNew)
+
+        //ltdtFmt
+        let ltdtFmt = await getLtdtFmt(ltdtNew)
+
         //set
-        memory.set(fn, ltdtNew)
+        memory.set(fn, {
+            ltdt: ltdtNew,
+            ltdtFmt,
+        })
 
         //emit
-        ev.emit('change', { type: 'insert', ltdt: ltdtNew })
+        ev.emit('change', { type: 'insert', ltdt: ltdtNew, ltdtFmt })
 
         // return ltdtNew
     }
@@ -111,21 +140,47 @@ function WDataSourceFromCsv(fd, opt = {}) {
             return
         }
 
+        //fn
+        let fn = path.basename(fp)
+        // console.log('fn', fn)
+
+        //check
+        if (!memory.has(fn)) {
+            throw new Error(`fn[${fn}] does not exist`)
+        }
+
         //ltdtNew
         let ltdtNew = await readCsv(fp)
         // console.log('ltdtNew', ltdtNew)
 
-        //fn
-        let fn = path.basename(fp)
+        //ltdtFmt
+        let ltdtFmt = await getLtdtFmt(ltdtNew)
+        // console.log('ltdtFmt', ltdtFmt)
 
         //ltdtOld
-        let ltdtOld = memory.get(fn)
+        let { ltdt: ltdtOld } = memory.get(fn)
+        // console.log('ltdtOld', ltdtOld)
 
         //check
         if (size(ltdtOld) === 0) {
-            ev.emit('change', { type: 'insert', ltdt: ltdtOld })
+
+            //set, 要先set才能emit與return
+            memory.set(fn, {
+                ltdt: ltdtNew,
+                ltdtFmt,
+            })
+
+            //emit
+            ev.emit('change', { type: 'insert', ltdt: ltdtNew, ltdtFmt })
+
             return
         }
+
+        //set
+        memory.set(fn, {
+            ltdt: ltdtNew,
+            ltdtFmt,
+        })
 
         //ltdtDiffByKey
         let r = ltdtDiffByKey(ltdtOld, ltdtNew, key)
@@ -133,18 +188,18 @@ function WDataSourceFromCsv(fd, opt = {}) {
         // console.log('ltdtNew', ltdtNew)
         // console.log('r', r)
 
-        //set
-        memory.set(fn, ltdtNew)
-
         //emit, 此處要針對不同種類數據emit, 不能用else-if
         if (size(r.add) > 0) {
-            ev.emit('change', { type: 'insert', ltdt: r.add })
+            let ltdtAddFmt = await getLtdtFmt(r.add)
+            ev.emit('change', { type: 'insert', ltdt: r.add, ltdtFmt: ltdtAddFmt })
         }
         if (size(r.diff) > 0) {
-            ev.emit('change', { type: 'save', ltdt: r.diff })
+            let ltdtDiffFmt = await getLtdtFmt(r.diff)
+            ev.emit('change', { type: 'save', ltdt: r.diff, ltdtFmt: ltdtDiffFmt })
         }
         if (size(r.del) > 0) {
-            ev.emit('change', { type: 'del', ltdt: r.del })
+            let ltdtDelFmt = await getLtdtFmt(r.del)
+            ev.emit('change', { type: 'del', ltdt: r.del, ltdtFmt: ltdtDelFmt })
         }
 
         // return ltdtNew
@@ -157,13 +212,14 @@ function WDataSourceFromCsv(fd, opt = {}) {
         let fn = path.basename(fp)
 
         //ltdtOld
-        let ltdtOld = memory.get(fn)
+        let { ltdt: ltdtOld, ltdtFmt } = memory.get(fn)
+        // console.log('ltdtOld', ltdtOld)
 
         //delete
         memory.delete(fn)
 
         //emit
-        ev.emit('change', { type: 'del', ltdt: ltdtOld })
+        ev.emit('change', { type: 'del', ltdt: ltdtOld, ltdtFmt })
 
         // return ltdtOld
     }
@@ -210,8 +266,8 @@ function WDataSourceFromCsv(fd, opt = {}) {
     //select
     let select = async () => {
         let allData = []
-        for (let [, records] of memory.entries()) {
-            allData.push(...records)
+        for (let [, r] of memory.entries()) {
+            allData.push(...r.ltdtFmt)
         }
         // console.log('select', allData)
         return allData

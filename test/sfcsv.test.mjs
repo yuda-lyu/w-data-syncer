@@ -9,6 +9,24 @@ import WDataSourceFromCsv from '../src/WDataSourceFromCsv.mjs'
 
 describe('sfcsv', function() {
 
+    let cvLtdt = (ltdt) => {
+        ltdt = _.cloneDeep(ltdt) //須與記憶體脫勾, 否則會連動WDataSyncer內記憶體數據, 進而影響偵測差異
+        ltdt = _.map(ltdt, (dt) => {
+            _.each(dt, (v, k) => {
+                if (w.isnum(v)) {
+                    v = w.cdbl(v)
+                    dt[k] = v
+                }
+                if (w.isestr(v)) {
+                    v = _.trim(v)
+                    dt[k] = v
+                }
+            })
+            return dt
+        })
+        return ltdt
+    }
+
     let test = () => {
         let pm = w.genPm()
 
@@ -59,10 +77,11 @@ describe('sfcsv', function() {
         let omSrc = WDataSourceFromCsv(fdSrc, {
             heads: ['time', 'value'],
             key: 'time',
+            converter: cvLtdt,
         })
         omSrc.on('change', (msg) => {
             // console.log('WDataSourceFromCsv change msg', msg)
-            ms_csv.push({ 'detect data': `type[${msg.type}], data[${JSON.stringify(msg.ltdt[0])}]` })
+            ms_csv.push({ 'detect data': `type[${msg.type}], data[${JSON.stringify(msg.ltdtFmt[0])}]` })
         })
 
         return pm
@@ -81,25 +100,25 @@ describe('sfcsv', function() {
         { 'push data': 'i=5, n=1' },
         { 'push data': 'i=6, n=2' },
         {
-            'detect data': 'type[insert], data[{"time":"2020-01-01T00:00:00","value":" 123.001"}]'
+            'detect data': 'type[insert], data[{"time":"2020-01-01T00:00:00","value":123.001}]'
         },
         {
-            'detect data': 'type[insert], data[{"time":"2020-01-01T00:01:00","value":" 123.002"}]'
+            'detect data': 'type[insert], data[{"time":"2020-01-01T00:01:00","value":123.002}]'
         },
         {
-            'detect data': 'type[insert], data[{"time":"2020-01-01T00:02:00","value":" 123.003"}]'
+            'detect data': 'type[insert], data[{"time":"2020-01-01T00:02:00","value":123.003}]'
         },
         {
-            'detect data': 'type[insert], data[{"time":"2020-01-01T00:03:00","value":" 123.004"}]'
+            'detect data': 'type[insert], data[{"time":"2020-01-01T00:03:00","value":123.004}]'
         },
         {
-            'detect data': 'type[save], data[{"time":"2020-01-01T00:02:00","value":" 234.903"}]'
+            'detect data': 'type[save], data[{"time":"2020-01-01T00:02:00","value":234.903}]'
         },
         {
-            'detect data': 'type[insert], data[{"time":"2020-01-01T00:04:00","value":" 123.005"}]'
+            'detect data': 'type[insert], data[{"time":"2020-01-01T00:04:00","value":123.005}]'
         },
         {
-            'detect data': 'type[insert], data[{"time":"2020-01-01T00:05:00","value":" 123.006"}]'
+            'detect data': 'type[insert], data[{"time":"2020-01-01T00:05:00","value":123.006}]'
         }
     ]
 

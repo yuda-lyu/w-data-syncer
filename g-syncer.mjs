@@ -63,7 +63,7 @@ let test = async () => {
         })
         omSrc.on('change', (msg) => {
             console.log('WDataSourceFromCsv change msg', msg)
-            ms_csv.push({ 'detect data': JSON.stringify(msg) })
+            ms_csv.push({ 'detect data': `type[${msg.type}], data[${JSON.stringify(msg.ltdtFmt[0])}]` })
         })
     }
 
@@ -127,28 +127,28 @@ await test()
 //   { 'push data': 'i=5, n=1' },
 //   { 'push data': 'i=6, n=2' },
 //   {
-//     'detect data': '{"type":"insert","ltdt":[{"id":"2020-01-01T00:00:00","value":" 123.001"}]}'
+//     'detect data': 'type[insert], data[{"id":"2020-01-01T00:00:00","value":" 123.001"}]'
 //   },
 //   {
-//     'detect data': '{"type":"insert","ltdt":[{"id":"2020-01-01T00:01:00","value":" 123.002"}]}'
+//     'detect data': 'type[insert], data[{"id":"2020-01-01T00:01:00","value":" 123.002"}]'
 //   },
 //   {
-//     'detect data': '{"type":"insert","ltdt":[{"id":"2020-01-01T00:02:00","value":" 123.003"}]}'
+//     'detect data': 'type[insert], data[{"id":"2020-01-01T00:02:00","value":" 123.003"}]'
 //   },
 //   {
-//     'detect data': '{"type":"insert","ltdt":[{"id":"2020-01-01T00:03:00","value":" 123.004"}]}'
+//     'detect data': 'type[insert], data[{"id":"2020-01-01T00:03:00","value":" 123.004"}]'
 //   },
 //   {
-//     'detect data': '{"type":"save","ltdt":[{"id":"2020-01-01T00:02:00","value":" 234.903"}]}'
+//     'detect data': 'type[save], data[{"id":"2020-01-01T00:02:00","value":" 234.903"}]'
 //   },
 //   {
-//     'detect data': '{"type":"insert","ltdt":[{"id":"2020-01-01T00:04:00","value":" 123.005"}]}'
+//     'detect data': 'type[insert], data[{"id":"2020-01-01T00:04:00","value":" 123.005"}]'
 //   },
 //   {
-//     'detect data': '{"type":"insert","ltdt":[{"id":"2020-01-01T00:05:00","value":" 123.006"}]}'
+//     'detect data': 'type[insert], data[{"id":"2020-01-01T00:05:00","value":" 123.006"}]'
 //   },
 //   {
-//     'detect data': '{"type":"insert","ltdt":[{"id":"2020-01-01T00:06:00","value":" 123.007"}]}'
+//     'detect data': 'type[insert], data[{"id":"2020-01-01T00:06:00","value":" 123.007"}]'
 //   },
 //   {
 //     'sync data': '{"type":"insert","items":[{"id":"2020-01-01T00:00:00","value":" 123.001"}]}'
