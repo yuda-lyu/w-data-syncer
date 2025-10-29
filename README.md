@@ -12,6 +12,7 @@ A tool for data detection and synchronization.
 To view documentation or get support, visit [docs](https://yuda-lyu.github.io/w-data-syncer/global.html).
 
 ## Installation
+
 ### Using npm(ES6 module):
 ```alias
 npm i w-data-syncer
