@@ -29,7 +29,7 @@
 <nav >
     
     
-    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#WDataSourceFromCsv">WDataSourceFromCsv</a></li><li><a href="global.html#WDataSyncer">WDataSyncer</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#WDataSourceFromCsv">WDataSourceFromCsv</a></li><li><a href="global.html#WDataSyncer">WDataSyncer</a></li><li><a href="global.html#syncByOrm">syncByOrm</a></li></ul>
     
 </nav>
 
@@ -46,19 +46,13 @@
     <section>
         <article>
             <pre class="prettyprint source linenums"><code>import get from 'lodash-es/get.js'
-import each from 'lodash-es/each.js'
-import map from 'lodash-es/map.js'
 import size from 'lodash-es/size.js'
-import sortBy from 'lodash-es/sortBy.js'
 import evem from 'wsemi/src/evem.mjs'
 import genPm from 'wsemi/src/genPm.mjs'
-import isestr from 'wsemi/src/isestr.mjs'
 import ispint from 'wsemi/src/ispint.mjs'
-import isearr from 'wsemi/src/isearr.mjs'
 import isbol from 'wsemi/src/isbol.mjs'
 import cint from 'wsemi/src/cint.mjs'
-import haskey from 'wsemi/src/haskey.mjs'
-import ltdtDiffByKey from 'wsemi/src/ltdtDiffByKey.mjs'
+import syncByOrm from './syncByOrm.mjs'
 
 
 /**
@@ -68,16 +62,11 @@ import ltdtDiffByKey from 'wsemi/src/ltdtDiffByKey.mjs'
  * @param {Object} opt - 設定物件
  * @param {String} [opt.key='time'] - 用於排序與比對的 key
  * @param {Number} [opt.timeInterval=20000] - 同步觸發間隔時間（毫秒），預設每 20 秒執行一次（1 分鐘 3 次）
- * @param {boolean} [opt.useShowLog=false] - 是否顯示 log 資訊
+ * @param {Object} [opt.srLog=null] - log 器，需提供 info、error 函數
+ * @param {boolean} [opt.useShowLog=false] - 是否顯示 log 資訊，未提供 srLog 時以 console.log 顯示
  * @returns {EventEmitter}
  */
 function WDataSyncer(src, tar, opt = {}) {
-
-    //key
-    let key = get(opt, 'key')
-    if (!isestr(key)) {
-        key = 'time'
-    }
 
     //timeInterval
     let timeInterval = get(opt, 'timeInterval')
@@ -122,207 +111,62 @@ function WDataSyncer(src, tar, opt = {}) {
         useShowLog = false
     }
 
+    //srLog, 未提供時若useShowLog則以console.log顯示
+    let srLog = get(opt, 'srLog', null)
+    if (!srLog &amp;&amp; useShowLog) {
+        srLog = {
+            info: (o) => console.log(o),
+            error: (o) => console.log(o),
+        }
+    }
+
     //ev
     let ev = evem()
 
+    //emitWait
+    let emitWait = async (name, data, useWait) => {
+        if (useWait) {
+            let pm = genPm()
+            ev.emit(name, data, pm)
+            await pm
+                .catch(() => {})
+        }
+        else {
+            ev.emit(name, data)
+        }
+    }
+
     //compareAndSync
     let compareAndSync = async () => {
-        try {
 
-            //ltdtSrc
-            if (useShowLog) {
-                console.log(`src select...`)
-            }
-            let ltdtSrc = await src.select()
-            if (useShowLog) {
-                console.log(`src select done`)
-            }
-            // console.log('ltdtSrc', ltdtSrc)
+        //syncByOrm
+        let r = await syncByOrm(src, tar, { ...opt, srLog })
 
-            //check
-            if (!isearr(ltdtSrc)) {
-                if (useShowLog) {
-                    console.log(`no src, skip and waiting...`)
-                }
-                return
-            }
-
-            //ltdtTar
-            if (useShowLog) {
-                console.log(`tar select...`)
-            }
-            let ltdtTar = await tar.select()
-            if (useShowLog) {
-                console.log(`tar select done`)
-            }
-            // console.log('ltdtTar', ltdtTar)
-
-            //check
-            if (size(ltdtSrc) &lt; size(ltdtTar)) {
-                if (useShowLog) {
-                    console.log(`numSrc[${size(ltdtSrc)}] &lt; numTar[${size(ltdtTar)}], skip and waiting...`)
-                }
-                return
-            }
-            if (useShowLog) {
-                console.log(`size(ltdtSrc)`, size(ltdtSrc))
-                console.log(`size(ltdtTar)`, size(ltdtTar))
-            }
-
-            //sortBy
-            if (useShowLog) {
-                console.log('sortBy...')
-            }
-            ltdtSrc = sortBy(ltdtSrc, key)
-            ltdtTar = sortBy(ltdtTar, key)
-            if (useShowLog) {
-                console.log('sortBy done')
-            }
-
-            //排序與建立map比對
-            if (useShowLog) {
-                console.log('ltdtDiffByKey...')
-            }
-            let r = ltdtDiffByKey(ltdtTar, ltdtSrc, key, { withInfor: false })
-            if (useShowLog) {
-                console.log('ltdtDiffByKey done')
-            }
-            // console.log('r', r)
-
-            let nAdd = size(r.add)
-            let nDiff = size(r.diff)
-            let nDel = size(r.del)
-
-            if (useShowLog) {
-                console.log('operate and emit...')
-            }
-            if (nAdd > 0) {
-                if (useShowLog) {
-                    console.log('r.add', map(r.add, key), nAdd)
-                }
-                await tar.insert(r.add)
-
-                if (waitEmitInsert) {
-                    let pm = genPm()
-                    ev.emit('insert', r.add, pm)
-                    await pm
-                        .catch(() => {})
-                }
-                else {
-                    ev.emit('insert', r.add)
-                }
-
-                if (waitEmitChange) {
-                    let pm = genPm()
-                    ev.emit('change', { type: 'insert', items: r.add }, pm)
-                    await pm
-                        .catch(() => {})
-                }
-                else {
-                    ev.emit('change', { type: 'insert', items: r.add })
-                }
-
-            }
-            if (nDiff > 0) {
-                if (useShowLog) {
-                    console.log('r.diff', map(r.diff, key), nDiff)
-                }
-                await tar.save(r.diff)
-
-                if (waitEmitSave) {
-                    let pm = genPm()
-                    ev.emit('save', r.diff, pm)
-                    await pm
-                        .catch(() => {})
-                }
-                else {
-                    ev.emit('save', r.diff)
-                }
-
-                if (waitEmitChange) {
-                    let pm = genPm()
-                    ev.emit('change', { type: 'save', items: r.diff }, pm)
-                    await pm
-                        .catch(() => {})
-                }
-                else {
-                    ev.emit('change', { type: 'save', items: r.diff })
-                }
-
-            }
-            if (nDel > 0) {
-                if (useShowLog) {
-                    console.log('r.del', map(r.del, key), nDel)
-                }
-                await tar.del(r.del)
-
-                if (waitDel) {
-                    let pm = genPm()
-                    ev.emit('del', r.del, pm)
-                    await pm
-                        .catch(() => {})
-                }
-                else {
-                    ev.emit('del', r.del)
-                }
-
-                if (waitEmitChange) {
-                    let pm = genPm()
-                    ev.emit('change', { type: 'del', items: r.del }, pm)
-                    await pm
-                        .catch(() => {})
-                }
-                else {
-                    ev.emit('change', { type: 'del', items: r.del })
-                }
-
-            }
-            if ((nAdd + nDiff + nDel) > 0) {
-
-                //更改type
-                if (true) {
-                    let kp = {
-                        add: 'insert',
-                        diff: 'save',
-                        del: 'del',
-                        same: 'same',
-                    }
-                    let _r = {}
-                    each(r, (ltdt, type) => {
-                        if (haskey(kp, type)) {
-                            type = kp[type]
-                        }
-                        else {
-                            console.log('kp', kp)
-                            throw new Error(`invalid type[${type}]`)
-                        }
-                        _r[type] = ltdt
-                    })
-                    r = _r
-                }
-
-                if (waitEmitChangeAll) {
-                    let pm = genPm()
-                    ev.emit('change-all', r, pm)
-                    await pm
-                        .catch(() => {})
-                }
-                else {
-                    ev.emit('change-all', r)
-                }
-
-            }
-            if (useShowLog) {
-                console.log('operate and emit done')
-            }
-
+        //check, 跳過同步時不發送事件
+        if (!r) {
+            return
         }
-        catch (err) {
-            if (useShowLog) {
-                console.log(err)
-            }
-            ev.emit('error', err)
+
+        let nInsert = size(r.insert)
+        let nSave = size(r.save)
+        let nDel = size(r.del)
+
+        if (nInsert > 0) {
+            await emitWait('insert', r.insert, waitEmitInsert)
+            await emitWait('change', { type: 'insert', items: r.insert }, waitEmitChange)
         }
+        if (nSave > 0) {
+            await emitWait('save', r.save, waitEmitSave)
+            await emitWait('change', { type: 'save', items: r.save }, waitEmitChange)
+        }
+        if (nDel > 0) {
+            await emitWait('del', r.del, waitDel)
+            await emitWait('change', { type: 'del', items: r.del }, waitEmitChange)
+        }
+        if (r.b) {
+            await emitWait('change-all', r, waitEmitChangeAll)
+        }
+
     }
 
     //timer
@@ -385,7 +229,7 @@ export default WDataSyncer
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.4</a> on Sun Jul 13 2025 10:17:42 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Fri Jul 10 2026 16:36:39 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>
