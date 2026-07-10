@@ -9,7 +9,7 @@ import WDataSourceFromCsv from '../src/WDataSourceFromCsv.mjs'
 import WDataSyncer from '../src/WDataSyncer.mjs'
 
 
-describe('syncer', function() {
+describe('syncer_orm', function() {
 
     let test = async () => {
         let ms_trigger = []
@@ -81,7 +81,9 @@ describe('syncer', function() {
             omTar = WOrm(opt)
         }
 
-        let ev = WDataSyncer(omSrc, omTar, {
+        let ev = WDataSyncer('by-orm', {
+            src: omSrc,
+            tar: omTar,
             key: 'id',
             timeInterval: 1000, //每秒同步
         })

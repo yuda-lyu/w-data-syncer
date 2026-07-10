@@ -4,22 +4,41 @@ import evem from 'wsemi/src/evem.mjs'
 import genPm from 'wsemi/src/genPm.mjs'
 import ispint from 'wsemi/src/ispint.mjs'
 import isbol from 'wsemi/src/isbol.mjs'
+import isfun from 'wsemi/src/isfun.mjs'
 import cint from 'wsemi/src/cint.mjs'
+import getErrorMessage from 'wsemi/src/getErrorMessage.mjs'
 import syncByOrm from './syncByOrm.mjs'
+import syncByBuffer from './syncByBuffer.mjs'
+import syncBy1To1 from './syncBy1To1.mjs'
+import syncByNTo1 from './syncByNTo1.mjs'
 
 
 /**
  * 資料單向同步程序
- * @param {Object} src - 資料來源，需提供 select 函數 (async)
- * @param {Object} tar - 資料目標，需提供 select、insert、save、del 函數 (async)
- * @param {Object} opt - 設定物件
- * @param {String} [opt.key='time'] - 用於排序與比對的 key
+ * @param {String} mode - 同步模式，可選 'by-orm'、'by-buffer'、'by-1to1'、'by-nto1'
+ * @param {Object} opt - 設定物件，除下列參數外，其餘設定會傳遞給對應模式的同步函數
+ * @param {Object} [opt.src] - mode='by-orm' 時之資料來源，需提供 select 函數 (async)
+ * @param {Object} [opt.tar] - mode='by-orm' 時之資料目標，需提供 select、insert、save、del 函數 (async)
+ * @param {String} [opt.key='time'] - mode='by-orm' 時用於排序與比對的 key
+ * @param {Function} [opt.funGetFiles] - mode='by-buffer' 時取得來源檔案的函數 (async)
+ * @param {Function} [opt.funGetVfpsSrc] - mode='by-1to1' 或 'by-nto1' 時取得來源檔案清單的函數 (async)
+ * @param {Function} [opt.funProc] - mode='by-1to1' 或 'by-nto1' 時處理檔案的函數 (async)
+ * @param {Function} [opt.funRemove] - mode='by-1to1' 時移除檔案的函數 (async)
  * @param {Number} [opt.timeInterval=20000] - 同步觸發間隔時間（毫秒），預設每 20 秒執行一次（1 分鐘 3 次）
+ * @param {boolean} [opt.waitEmitInsert=false] - 發送 insert（或 add）事件時是否等待監聽器 resolve
+ * @param {boolean} [opt.waitEmitSave=false] - 發送 save（或 modify）事件時是否等待監聽器 resolve
+ * @param {boolean} [opt.waitDel=false] - 發送 del（或 remove）事件時是否等待監聽器 resolve
+ * @param {boolean} [opt.waitEmitChange=false] - 發送 change 事件時是否等待監聽器 resolve
+ * @param {boolean} [opt.waitEmitChangeAll=false] - 發送 change-all 事件時是否等待監聽器 resolve
  * @param {Object} [opt.srLog=null] - log 器，需提供 info、error 函數
- * @param {boolean} [opt.useShowLog=false] - 是否顯示 log 資訊，未提供 srLog 時以 console.log 顯示
- * @returns {EventEmitter}
+ * @returns {EventEmitter} 回傳事件發送器並提供 clear 函數停止同步。mode='by-orm' 可監聽 insert、save、del、change、change-all 事件；mode='by-buffer' 可監聽 change-all 事件；mode='by-1to1' 或 'by-nto1' 可監聽 add、modify、remove、change、change-all 事件；各模式皆可監聽 error 事件
  */
-function WDataSyncer(src, tar, opt = {}) {
+function WDataSyncer(mode, opt = {}) {
+
+    //check
+    if (mode !== 'by-orm' && mode !== 'by-buffer' && mode !== 'by-1to1' && mode !== 'by-nto1') {
+        throw new Error(`mode must be 'by-orm', 'by-buffer', 'by-1to1' or 'by-nto1'`)
+    }
 
     //timeInterval
     let timeInterval = get(opt, 'timeInterval')
@@ -58,19 +77,19 @@ function WDataSyncer(src, tar, opt = {}) {
         waitEmitChangeAll = false
     }
 
-    //useShowLog
-    let useShowLog = get(opt, 'useShowLog')
-    if (!isbol(useShowLog)) {
-        useShowLog = false
+    //srLog
+    let srLog = get(opt, 'srLog', null)
+
+    //srLogInfo
+    let srLogInfo = get(srLog, 'info', null)
+    if (!isfun(srLogInfo)) {
+        srLogInfo = () => {}
     }
 
-    //srLog, 未提供時若useShowLog則以console.log顯示
-    let srLog = get(opt, 'srLog', null)
-    if (!srLog && useShowLog) {
-        srLog = {
-            info: (o) => console.log(o),
-            error: (o) => console.log(o),
-        }
+    //srLogError
+    let srLogError = get(srLog, 'error', null)
+    if (!isfun(srLogError)) {
+        srLogError = () => {}
     }
 
     //ev
@@ -92,31 +111,66 @@ function WDataSyncer(src, tar, opt = {}) {
     //compareAndSync
     let compareAndSync = async () => {
 
-        //syncByOrm
-        let r = await syncByOrm(src, tar, { ...opt, srLog })
+        //r
+        let r = null
+        if (mode === 'by-orm') {
+            let src = get(opt, 'src')
+            let tar = get(opt, 'tar')
+            r = await syncByOrm(src, tar, opt)
+        }
+        else if (mode === 'by-buffer') {
+            let funGetFiles = get(opt, 'funGetFiles')
+            r = await syncByBuffer(funGetFiles, opt)
+        }
+        else if (mode === 'by-1to1') {
+            r = await syncBy1To1(opt)
+        }
+        else if (mode === 'by-nto1') {
+            r = await syncByNTo1(opt)
+        }
 
-        //check, 跳過同步時不發送事件
-        if (!r) {
+        //check, 跳過同步或無異動時不發送事件
+        if (!get(r, 'b')) {
             return
         }
 
-        let nInsert = size(r.insert)
-        let nSave = size(r.save)
-        let nDel = size(r.del)
-
-        if (nInsert > 0) {
-            await emitWait('insert', r.insert, waitEmitInsert)
-            await emitWait('change', { type: 'insert', items: r.insert }, waitEmitChange)
+        if (mode === 'by-orm') {
+            let nInsert = size(r.insert)
+            let nSave = size(r.save)
+            let nDel = size(r.del)
+            if (nInsert > 0) {
+                await emitWait('insert', r.insert, waitEmitInsert)
+                await emitWait('change', { type: 'insert', items: r.insert }, waitEmitChange)
+            }
+            if (nSave > 0) {
+                await emitWait('save', r.save, waitEmitSave)
+                await emitWait('change', { type: 'save', items: r.save }, waitEmitChange)
+            }
+            if (nDel > 0) {
+                await emitWait('del', r.del, waitDel)
+                await emitWait('change', { type: 'del', items: r.del }, waitEmitChange)
+            }
+            await emitWait('change-all', r, waitEmitChangeAll)
         }
-        if (nSave > 0) {
-            await emitWait('save', r.save, waitEmitSave)
-            await emitWait('change', { type: 'save', items: r.save }, waitEmitChange)
+        else if (mode === 'by-buffer') {
+            await emitWait('change-all', r, waitEmitChangeAll)
         }
-        if (nDel > 0) {
-            await emitWait('del', r.del, waitDel)
-            await emitWait('change', { type: 'del', items: r.del }, waitEmitChange)
-        }
-        if (r.b) {
+        else if (mode === 'by-1to1' || mode === 'by-nto1') {
+            let nAdd = size(r.add)
+            let nModify = size(r.modify)
+            let nRemove = size(r.remove)
+            if (nAdd > 0) {
+                await emitWait('add', r.add, waitEmitInsert)
+                await emitWait('change', { type: 'add', items: r.add }, waitEmitChange)
+            }
+            if (nModify > 0) {
+                await emitWait('modify', r.modify, waitEmitSave)
+                await emitWait('change', { type: 'modify', items: r.modify }, waitEmitChange)
+            }
+            if (nRemove > 0) {
+                await emitWait('remove', r.remove, waitDel)
+                await emitWait('change', { type: 'remove', items: r.remove }, waitEmitChange)
+            }
             await emitWait('change-all', r, waitEmitChangeAll)
         }
 
@@ -128,28 +182,20 @@ function WDataSyncer(src, tar, opt = {}) {
 
         //check
         if (lock) {
-            if (useShowLog) {
-                console.log('locking...')
-            }
+            srLogInfo({ event: 'compareAndSync', msg: 'locking...' })
             return
         }
         lock = true
 
         //compareAndSync
-        if (useShowLog) {
-            console.log('compareAndSync...')
-        }
+        srLogInfo({ event: 'compareAndSync', msg: 'start...' })
         compareAndSync()
             .catch((err) => {
-                if (useShowLog) {
-                    console.log(err)
-                }
+                srLogError({ event: 'compareAndSync', msg: getErrorMessage(err) })
                 ev.emit('error', err)
             })
             .finally(() => {
-                if (useShowLog) {
-                    console.log('compareAndSync done')
-                }
+                srLogInfo({ event: 'compareAndSync', msg: 'done' })
                 lock = false
             })
 

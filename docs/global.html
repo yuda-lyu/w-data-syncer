@@ -290,7 +290,7 @@
 
     
 
-    <h4 class="name" id="WDataSyncer"><span class="type-signature"></span>WDataSyncer<span class="signature">(src, tar, opt)</span><span class="type-signature"> &rarr; {EventEmitter}</span></h4>
+    <h4 class="name" id="WDataSyncer"><span class="type-signature"></span>WDataSyncer<span class="signature">(mode, opt)</span><span class="type-signature"> &rarr; {EventEmitter}</span></h4>
 
     
 
@@ -306,7 +306,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="WDataSyncer.mjs.html">WDataSyncer.mjs</a>, <a href="WDataSyncer.mjs.html#line22">line 22</a>
+        <a href="WDataSyncer.mjs.html">WDataSyncer.mjs</a>, <a href="WDataSyncer.mjs.html#line36">line 36</a>
     </li></ul></dd>
     
 
@@ -378,13 +378,13 @@
 
         <tr>
             
-                <td class="name"><code>src</code></td>
+                <td class="name"><code>mode</code></td>
             
 
             <td class="type">
             
                 
-<span class="param-type">Object</span>
+<span class="param-type">String</span>
 
 
 
@@ -395,31 +395,7 @@
 
             
 
-            <td class="description last"><p>資料來源，需提供 select 函數 (async)</p></td>
-        </tr>
-
-    
-
-        <tr>
-            
-                <td class="name"><code>tar</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">Object</span>
-
-
-
-            
-            </td>
-
-            
-
-            
-
-            <td class="description last"><p>資料目標，需提供 select、insert、save、del 函數 (async)</p></td>
+            <td class="description last"><p>同步模式，可選 'by-orm'、'by-buffer'、'by-1to1'、'by-nto1'</p></td>
         </tr>
 
     
@@ -443,7 +419,7 @@
 
             
 
-            <td class="description last"><p>設定物件</p>
+            <td class="description last"><p>設定物件，除下列參數外，其餘設定會傳遞給對應模式的同步函數</p>
                 <h6>Properties</h6>
                 
 
@@ -469,6 +445,82 @@
     </thead>
 
     <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>src</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>mode='by-orm' 時之資料來源，需提供 select 函數 (async)</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>tar</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>mode='by-orm' 時之資料目標，需提供 select、insert、save、del 函數 (async)</p></td>
+        </tr>
+
     
 
         <tr>
@@ -506,7 +558,159 @@
                 </td>
             
 
-            <td class="description last"><p>用於排序與比對的 key</p></td>
+            <td class="description last"><p>mode='by-orm' 時用於排序與比對的 key</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>funGetFiles</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">function</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>mode='by-buffer' 時取得來源檔案的函數 (async)</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>funGetVfpsSrc</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">function</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>mode='by-1to1' 或 'by-nto1' 時取得來源檔案清單的函數 (async)</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>funProc</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">function</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>mode='by-1to1' 或 'by-nto1' 時處理檔案的函數 (async)</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>funRemove</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">function</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>mode='by-1to1' 時移除檔案的函數 (async)</p></td>
         </tr>
 
     
@@ -553,6 +757,206 @@
 
         <tr>
             
+                <td class="name"><code>waitEmitInsert</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">boolean</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>false</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>發送 insert（或 add）事件時是否等待監聽器 resolve</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>waitEmitSave</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">boolean</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>false</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>發送 save（或 modify）事件時是否等待監聽器 resolve</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>waitDel</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">boolean</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>false</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>發送 del（或 remove）事件時是否等待監聽器 resolve</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>waitEmitChange</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">boolean</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>false</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>發送 change 事件時是否等待監聽器 resolve</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>waitEmitChangeAll</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">boolean</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>false</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>發送 change-all 事件時是否等待監聽器 resolve</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
                 <td class="name"><code>srLog</code></td>
             
 
@@ -590,46 +994,6 @@
         </tr>
 
     
-
-        <tr>
-            
-                <td class="name"><code>useShowLog</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">boolean</span>
-
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-                    &lt;optional><br>
-                
-
-                
-
-                
-                </td>
-            
-
-            
-                <td class="default">
-                
-                    <code>false</code>
-                
-                </td>
-            
-
-            <td class="description last"><p>是否顯示 log 資訊，未提供 srLog 時以 console.log 顯示</p></td>
-        </tr>
-
-    
     </tbody>
 </table>
 
@@ -658,6 +1022,10 @@
 <h5 class="h5-returns">Returns:</h5>
 
         
+<div class="param-desc">
+    <p>回傳事件發送器並提供 clear 函數停止同步。mode='by-orm' 可監聽 insert、save、del、change、change-all 事件；mode='by-buffer' 可監聽 change-all 事件；mode='by-1to1' 或 'by-nto1' 可監聽 add、modify、remove、change、change-all 事件；各模式皆可監聽 error 事件</p>
+</div>
+
 
 
 <dl class="param-type">
@@ -1013,7 +1381,7 @@
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Fri Jul 10 2026 16:36:39 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Fri Jul 10 2026 17:33:30 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>
