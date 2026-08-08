@@ -82,13 +82,23 @@ function WDataSyncer(mode, opt = {}) {
 
     //srLogInfo
     let srLogInfo = get(srLog, 'info', null)
-    if (!isfun(srLogInfo)) {
+    if (isfun(srLogInfo)) {
+        srLogInfo = (...args) => {
+            return srLog.info(...args)
+        }
+    }
+    else {
         srLogInfo = () => {}
     }
 
     //srLogError
     let srLogError = get(srLog, 'error', null)
-    if (!isfun(srLogError)) {
+    if (isfun(srLogError)) {
+        srLogError = (...args) => {
+            return srLog.error(...args)
+        }
+    }
+    else {
         srLogError = () => {}
     }
 
