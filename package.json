@@ -1,9 +1,9 @@
 {
   "name": "w-data-syncer",
-  "version": "1.0.25",
+  "version": "1.0.26",
   "main": "dist/w-data-syncer.umd.js",
   "dependencies": {
-    "w-data-csv": "^1.0.20",
+    "w-data-csv": "^1.0.21",
     "wsemi": "^1.8.70"
   },
   "devDependencies": {
