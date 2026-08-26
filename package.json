@@ -1,13 +1,13 @@
 {
   "name": "w-data-syncer",
-  "version": "1.0.32",
+  "version": "1.0.33",
   "main": "dist/w-data-syncer.umd.js",
   "dependencies": {
-    "w-data-csv": "^1.0.27",
-    "wsemi": "^1.8.79"
+    "w-data-csv": "^1.0.28",
+    "wsemi": "^1.8.80"
   },
   "devDependencies": {
-    "w-orm-lowdb": "^1.0.20",
+    "w-orm-lowdb": "^1.0.21",
     "w-package-tools": "^1.1.15"
   },
   "scripts": {
