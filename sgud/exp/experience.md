@@ -1,0 +1,18 @@
+# 累積經驗
+
+本檔為執行工作時特有之累積經驗,留給後續之嘗試、執行與判斷,由agent自行編列、擴充與維護.過長時抽出舊者為`experience_<年月日>.md`,並於本檔註明何時抽出.
+
+## 計時器相關測試改為事件同步(2026-10-29,tm-datasyncer 第 1 輪)
+
+- **同步點選 `done` 事件,改動來源檔案在 `await` 它之後立即同步寫入**:`WDataSyncer` 之輪在 `finally` 內先 `lock = false` 再通知 `done`;`await` 其事件之續行是微任務,先於下一次計時器回調執行,故此時寫入檔案不會與任何進行中之輪重疊(無「寫到一半被讀」之競態).若改在別處(例如事件之外另起計時器)寫入,短間隔(測試用 50ms)下會與下一輪重疊.
+- **否定觀察窗改以輪數計**:原以固定等待(3000ms)觀察「之後不再發送事件」,改為再等兩個 `done` 且 `b` 為 false 之輪.注意這只覆蓋同步器自身之重複發送;`fsWatchFolder` 的 chokidar `awaitWriteFinish`(預設 2000ms 穩定才報告)之遲到重複事件無對應事件可等,改由逐筆「寫一筆、等其偵測與同步完成再寫下一筆」之交握與最後之 `deepStrictEqual`(多出的事件會使期望值不符)承擔.
+- **逐筆交握是 `syncer_orm` 的必要條件**:兩筆資料若在同一輪同步內被看到,`insert` 會合併成一個事件(items 兩筆),與期望不符;故每筆寫入後須等「來源偵測事件數」與「同步器 change 事件數」都達累計值才寫下一筆.第 4 筆(含修改第 3 筆)預期 2 個事件(insert、save).
+- **chokidar 的 `ready` 是首筆寫入的前提**:`fsWatchFolder` 在 `ignoreInitial` 預設下,watcher 就緒前新增之檔案若落在初始掃描之後會被漏掉;原測試靠「首筆延後 3 秒」隱含等待,改為等 `ready`(`WDataSourceFromCsv` 之 `opt.onTrace` 原樣轉交 `fsWatchFolder`).
+- **`sfcsv` 末筆寫入後立即 clear 不等偵測**:原測試期望值不含末筆(i=6)之偵測(寫入後同一回合即 `clear`,chokidar 尚未報告),事件同步版維持此語意,期望值不改.
+- **`syncByBuffer` 歷史資料夾以 `now2strp()`(秒級)命名**:同一秒內多輪共用同名資料夾,因 `funGetFiles` 先清空而結果正確;事件同步版輪與輪間隔縮短(測試 50ms),此情形必然出現,測試仍綠.未改產品,僅記錄.
+- **用 `process.getActiveResourcesInfo()` 的 `'Timeout'` 數驗證「clear 釋放計時器」**,同步比較前後數量,不需任何等待;trace 在 clear 後本來就靜默,單看 trace 驗不到計時器是否真的被 `clearInterval`.
+- **改造前實測**:5 檔(含 `syncer_orm`、`sfcsv`)在 CPU 壓力 8 行程下 30 案次 0 失敗(同規格 P7 所述,CPU 壓力不一定觸發);事件迴圈阻塞 400:1000 時一次全敗(該次最大延遲 11.2 秒,疑含外部停頓,不能全歸因於注入之負載);重度阻塞 1500:3000 時 `sfcsv`、`syncer_orm` 6/6 敗(失敗內容:數筆資料併成一次偵測、末筆未偵測到——3 秒配速小於 chokidar 穩定等待加延遲).改造後三種負載皆 0 失敗,單案耗時 `syncer_1to1` 等三檔由約 8.5 秒降至約 0.3~0.7 秒、`syncer_orm` 由約 26 秒降至約 16 秒(受 chokidar `awaitWriteFinish` 2 秒穩定下限限制,不可再縮).
+- **變異結果**:舊測試擊殺 12/23、新測試 22/23.新測試多擊殺者皆為舊測試無從觀察之行為(鎖、`clear` 釋放計時器、`clear` 後靜默、`fail`/`ok`、事件欄位、`change-all` 於 `by-orm`、回調拋錯隔離、轉交 `onTrace`).仍存活之 S2(`by-1to1` 不執行 `funRemove`):`syncer_1to1` 只驗事件內容、不驗目標資料夾檔案,屬既有盲點.
+- **平行模式下回調拋錯不隔離之變異(W9)使 mocha worker 崩潰而無 JSON 報告**(離開碼 0),判讀時不可只看 `failures`;改 `--no-parallel` 重跑可得斷言層級之失敗訊息.
+- **`quiet-run --lock` 在他套件有獨佔等待時取不到槽**(獨佔者登記後不再發新槽),且他套件連續排獨佔會使共用鎖長時間餓死;開發期檢查、全套測試、變異一併排入同一個 `--lock-exclusive` 段落(約 15 分)比等共用鎖實際。本輪獨佔排隊等待約 20、36、64 分鐘.
+- **測試鎖排隊**:本機多套件同時排隊 `--lock-exclusive`,新取共用鎖也被「獨佔等待中」擋住.改造前基準以動工前快照(`git archive HEAD` 的 `src`/`test`/`package.json` 加舊版 `wsemi`、`w-data-csv`、`w-orm-lowdb` 複製進 `base/node_modules`,其餘相依由上層 `node_modules` 解析)在單一獨佔鎖內跑,不必等它跑完才能開始實作;實作期間不得做 CPU 密集作業.

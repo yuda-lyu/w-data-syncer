@@ -130,7 +130,7 @@
 
     
 
-    <h4 class="name" id="WDataSourceFromCsv"><span class="type-signature"></span>WDataSourceFromCsv<span class="signature">(fd)</span><span class="type-signature"> &rarr; {EventEmitter}</span></h4>
+    <h4 class="name" id="WDataSourceFromCsv"><span class="type-signature"></span>WDataSourceFromCsv<span class="signature">(fd, opt<span class="signature-attributes">opt</span>)</span><span class="type-signature"> &rarr; {EventEmitter}</span></h4>
 
     
 
@@ -146,7 +146,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="WDataSourceFromCsv.mjs.html">WDataSourceFromCsv.mjs</a>, <a href="WDataSourceFromCsv.mjs.html#line25">line 25</a>
+        <a href="WDataSourceFromCsv.mjs.html">WDataSourceFromCsv.mjs</a>, <a href="WDataSourceFromCsv.mjs.html#line30">line 30</a>
     </li></ul></dd>
     
 
@@ -206,7 +206,11 @@
         <th>Type</th>
 
         
+        <th>Attributes</th>
+        
 
+        
+        <th>Default</th>
         
 
         <th class="last">Description</th>
@@ -232,10 +236,250 @@
             </td>
 
             
+                <td class="attributes">
+                
 
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
             
 
             <td class="description last"><p>要監控的資料夾路徑</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>opt</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>{}</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>設定物件</p>
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+        <th>Default</th>
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>heads</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Array</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>[]</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>CSV 檔案無標題列時使用之欄位名稱陣列</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>key</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">String</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>'time'</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>用於比對新舊數據的 key</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>converter</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">function</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>轉換函數，輸入 ltdt 回傳轉換後之 ltdt(可為 async)</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>onTrace</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">function</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>null</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>觀察回調函數，原樣轉交給監看資料夾之 wsemi fsWatchFolder 的 opt.onTrace，故事件與其相同：於內部事件發生當下同步呼叫，傳入一個凍結之事件物件 { type, ... }，供測試以事件(而非等待時間)同步與診斷。type 為 'tick' 時為每次週期輪詢(含 watching 為是否已有 watcher、exists 為監看路徑目前是否為資料夾)；'watch' 時為 chokidar 之 watcher 剛建立；'ready' 時為 chokidar 初始掃描完成(此後新增之檔案才會被偵測)；'emit' 時為偵測到一個檔案事件(含 kind 為 add、change、unlink、addDir、unlinkDir，fp 為路徑，src 為 'watcher' 或 'timer')；'error' 時為 watcher 自身出錯；'unwatch' 時為開始關閉 watcher；'closed' 時為 watcher 已關閉；'clear' 時為 clear 被呼叫(僅首次)。回調不帶接收者呼叫，其拋錯與回傳值(含回傳 Promise 之 rejection)皆忽略，不影響偵測，預設 null</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
         </tr>
 
     
@@ -306,7 +550,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="WDataSyncer.mjs.html">WDataSyncer.mjs</a>, <a href="WDataSyncer.mjs.html#line36">line 36</a>
+        <a href="WDataSyncer.mjs.html">WDataSyncer.mjs</a>, <a href="WDataSyncer.mjs.html#line38">line 38</a>
     </li></ul></dd>
     
 
@@ -994,6 +1238,46 @@
         </tr>
 
     
+
+        <tr>
+            
+                <td class="name"><code>onTrace</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">function</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>null</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>觀察回調函數，於內部事件發生當下同步呼叫，傳入一個凍結之事件物件 { type, ... }，供測試以事件(而非等待時間)同步與診斷。type 為 'tick' 時為每次計時觸發(含 n 為累計第幾次觸發自 1 起，locked 為上一輪尚未結束而跳過本輪，為 true 時不會有後續 begin)；'begin' 時為一輪同步開始(含 round 為第幾輪自 1 起，只計實際執行之輪，跳過者不計)；'emit' 時為即將發送一個事件(含 round，name 為事件名稱 'insert'、'save'、'del'、'add'、'modify'、'remove'、'change'、'change-all'，kind 為 name 是 'change' 時之 type 否則為 null，size 為該事件 items 筆數，name 是 'change-all' 時為 null)；'fail' 時為一輪同步出錯且即將發送 error 事件(含 round，msg 為錯誤訊息字串，不傳出 Error 物件，請由 error 事件取得)；'done' 時為一輪同步結束且鎖已釋放(含 round，ok 為是否未出錯，b 為該輪是否有異動，bErr 為同步函數是否回報錯誤旗標)；'clear' 時為 clear 被呼叫(僅首次)。clear 後不再通知任何事件，進行中之輪的後續事件亦然。回調不帶接收者呼叫，其拋錯與回傳值(含回傳 Promise 之 rejection)皆忽略，不影響同步，預設 null</p></td>
+        </tr>
+
+    
     </tbody>
 </table>
 
@@ -1381,7 +1665,7 @@
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Wed Oct 28 2026 01:52:48 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Thu Oct 29 2026 09:42:53 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>

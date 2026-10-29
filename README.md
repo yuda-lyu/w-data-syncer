@@ -18,6 +18,27 @@ To view documentation or get support, visit [docs](https://yuda-lyu.github.io/w-
 npm i w-data-syncer
 ```
 
+#### Observing events with `opt.onTrace`:
+`WDataSyncer` and `WDataSourceFromCsv` accept an optional `opt.onTrace` callback. It is called synchronously with a frozen event object `{ type, ... }` when something happens inside, so that tests (and diagnostics) can synchronize on events instead of waiting for a number of milliseconds. It is optional: when it is not given, nothing changes. A callback that throws, returns a rejected promise, or is not a function never affects the sync. No event is reported after `clear()`.
+
+- `WDataSyncer` events (`type`): `tick` (`n`, `locked`), `begin` (`round`), `emit` (`round`, `name`, `kind`, `size`), `fail` (`round`, `msg`), `done` (`round`, `ok`, `b`, `bErr`), `clear`.
+- `WDataSourceFromCsv` forwards `opt.onTrace` to the folder watcher (`fsWatchFolder` of wsemi), so its events are `tick`, `watch`, `ready`, `emit` (`kind`, `fp`, `src`), `error`, `unwatch`, `closed`, `clear`.
+
+```alias
+import WDataSyncer from 'w-data-syncer/src/WDataSyncer.mjs'
+
+let ev = WDataSyncer('by-1to1', {
+    // ...funGetVfpsSrc, funProc, funRemove, etc.
+    timeInterval: 1000,
+    onTrace: (e) => {
+        if (e.type === 'done') {
+            // one sync round has finished: e.round, e.ok, e.b(any change), e.bErr
+            console.log(e)
+        }
+    },
+})
+```
+
 #### Example for WDataSourceFromCsv:
 > **Link:** [[dev source code](https://github.com/yuda-lyu/w-data-syncer/blob/master/g-sfcsv.mjs)]
 ```alias

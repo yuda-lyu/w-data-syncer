@@ -20,6 +20,11 @@ import wdc from 'w-data-csv/src/WDataCsv.mjs'
 /**
  * 檔案CSV來源數據供給器
  * @param {string} fd - 要監控的資料夾路徑
+ * @param {Object} [opt={}] - 設定物件
+ * @param {Array} [opt.heads=[]] - CSV 檔案無標題列時使用之欄位名稱陣列
+ * @param {String} [opt.key='time'] - 用於比對新舊數據的 key
+ * @param {Function} [opt.converter] - 轉換函數，輸入 ltdt 回傳轉換後之 ltdt(可為 async)
+ * @param {Function} [opt.onTrace=null] - 觀察回調函數，原樣轉交給監看資料夾之 wsemi fsWatchFolder 的 opt.onTrace，故事件與其相同：於內部事件發生當下同步呼叫，傳入一個凍結之事件物件 { type, ... }，供測試以事件(而非等待時間)同步與診斷。type 為 'tick' 時為每次週期輪詢(含 watching 為是否已有 watcher、exists 為監看路徑目前是否為資料夾)；'watch' 時為 chokidar 之 watcher 剛建立；'ready' 時為 chokidar 初始掃描完成(此後新增之檔案才會被偵測)；'emit' 時為偵測到一個檔案事件(含 kind 為 add、change、unlink、addDir、unlinkDir，fp 為路徑，src 為 'watcher' 或 'timer')；'error' 時為 watcher 自身出錯；'unwatch' 時為開始關閉 watcher；'closed' 時為 watcher 已關閉；'clear' 時為 clear 被呼叫(僅首次)。回調不帶接收者呼叫，其拋錯與回傳值(含回傳 Promise 之 rejection)皆忽略，不影響偵測，預設 null
  * @returns {EventEmitter} - 具有 select 方法的事件發射器
  */
 function WDataSourceFromCsv(fd, opt = {}) {
@@ -228,7 +233,7 @@ function WDataSourceFromCsv(fd, opt = {}) {
     let pmq = pmQueue(1) //同時處理1個
 
     //watcher
-    let watcher = fsWatchFolder(fd)
+    let watcher = fsWatchFolder(fd, { onTrace: get(opt, 'onTrace') })
     watcher.on('change', async(msg) => {
         // console.log(msg.type, msg.fp)
         if (msg.type === 'add') {

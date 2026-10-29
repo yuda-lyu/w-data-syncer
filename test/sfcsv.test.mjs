@@ -5,6 +5,7 @@ import w from 'wsemi'
 import ot from 'dayjs'
 import WDataSourceFromCsv from '../src/WDataSourceFromCsv.mjs'
 // import WDataSyncer from '../src/WDataSyncer.mjs'
+import { createRecorder, createGate } from './tools/syncerTraceKit.mjs'
 
 
 describe('sfcsv', function() {
@@ -27,9 +28,7 @@ describe('sfcsv', function() {
         return ltdt
     }
 
-    let test = () => {
-        let pm = w.genPm()
-
+    let test = async () => {
         let ms_trigger = []
         let ms_csv = []
 
@@ -37,10 +36,33 @@ describe('sfcsv', function() {
 
         w.fsCleanFolder(fdSrc)
 
+        //以onTrace與被測物自身事件同步, 不以等待時間同步
+        let tr = createRecorder()
+        let gate = createGate() //來源偵測到之change事件數
+
+        let omSrc = WDataSourceFromCsv(fdSrc, {
+            heads: ['time', 'value'],
+            key: 'time',
+            converter: cvLtdt,
+            onTrace: tr.onTrace,
+        })
+        omSrc.on('change', (msg) => {
+            // console.log('WDataSourceFromCsv change msg', msg)
+            ms_csv.push({ 'detect data': `type[${msg.type}], data[${JSON.stringify(msg.ltdtFmt[0])}]` })
+            gate.hit()
+        })
+
+        //等chokidar初始掃描完成, 其後新增之檔案才會被偵測到(原以首筆資料延後3s寫入隱含等待)
+        await tr.next((e) => e.type === 'ready', 'watcher ready')
+
+        //每次寫入後預期來源偵測到之change事件數, 第4筆因同時修改第3筆故為insert與save共2件; 末筆寫入後即clear, 不等偵測(同原測試, 故期望值不含末筆之偵測)
+        let numEvents = [1, 1, 1, 2, 1, 1, 0]
+
         let n = 0
         let i = -1
         let h = 0
-        let timer = setInterval(() => {
+        let num = 0
+        for (let numEvent of numEvents) {
             n++
             i++
             let t = ot('2020-01-01T00:00:00', 'YYYY-MM-DDTHH:mm:ss')
@@ -61,30 +83,21 @@ describe('sfcsv', function() {
                 n = 0
                 h++
             }
-            if (h === 1 && n === 2) {
-                clearInterval(timer)
-                omSrc.clear()
-                w.fsDeleteFolder(fdSrc)
-
-                let ms = [
-                    ...ms_trigger,
-                    ...ms_csv,
-                ]
-                // console.log('ms', ms)
-                pm.resolve(ms)
+            num += numEvent
+            if (numEvent > 0) {
+                await gate.until(num, 'source change')
             }
-        }, 3000)
-        let omSrc = WDataSourceFromCsv(fdSrc, {
-            heads: ['time', 'value'],
-            key: 'time',
-            converter: cvLtdt,
-        })
-        omSrc.on('change', (msg) => {
-            // console.log('WDataSourceFromCsv change msg', msg)
-            ms_csv.push({ 'detect data': `type[${msg.type}], data[${JSON.stringify(msg.ltdtFmt[0])}]` })
-        })
+        }
 
-        return pm
+        omSrc.clear()
+        w.fsDeleteFolder(fdSrc)
+
+        let ms = [
+            ...ms_trigger,
+            ...ms_csv,
+        ]
+        // console.log('ms', ms)
+        return ms
     }
     // await test()
     //     .catch((err) => {

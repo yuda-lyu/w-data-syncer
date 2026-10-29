@@ -3,13 +3,13 @@ import fs from 'fs'
 import map from 'lodash-es/map.js'
 import filter from 'lodash-es/filter.js'
 import sortBy from 'lodash-es/sortBy.js'
-import delay from 'wsemi/src/delay.mjs'
 import fsTreeFolder from 'wsemi/src/fsTreeFolder.mjs'
 import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
 import fsCleanFolder from 'wsemi/src/fsCleanFolder.mjs'
 import fsDeleteFolder from 'wsemi/src/fsDeleteFolder.mjs'
 import fsCopyFile from 'wsemi/src/fsCopyFile.mjs'
 import WDataSyncer from '../src/WDataSyncer.mjs'
+import { createRecorder } from './tools/syncerTraceKit.mjs'
 
 
 describe('syncer_buffer', function() {
@@ -54,6 +54,9 @@ describe('syncer_buffer', function() {
         fs.writeFileSync(`${fdSrc}/a.txt`, 'A1', 'utf8')
         fs.writeFileSync(`${fdSrc}/b.txt`, 'B1', 'utf8')
 
+        //以onTrace事件同步, 不以等待時間同步: 同步點為某一輪同步結束(done, 鎖已釋放), 此時再改動來源檔案不會與進行中之輪重疊
+        let tr = createRecorder()
+
         let ev = WDataSyncer('by-buffer', {
             numKeep: 1,
             fdFromStorageTempHists: fdHists,
@@ -61,22 +64,27 @@ describe('syncer_buffer', function() {
             fdFromStorageTemp: fdTemp,
             fdFromStorage: fdStorage,
             funGetFiles,
-            timeInterval: 1000, //每秒同步
+            timeInterval: 50, //同步間隔, 正確性不依賴其長短
+            onTrace: tr.onTrace,
         })
         ev.on('change-all', (msg) => {
             ms.push({ 'sync data': JSON.stringify(msg), 'storage': snapshot(fdStorage) })
         })
 
-        //等首次同步
-        await delay(2500)
+        //等首次同步(有異動之輪結束)
+        await tr.next((e) => e.type === 'done' && e.b, 'first sync')
 
         //修改
         fs.writeFileSync(`${fdSrc}/a.txt`, 'A2', 'utf8')
-        await delay(3000)
+        await tr.next((e) => e.type === 'done' && e.b, 'sync after modify')
 
         //刪除
         fs.unlinkSync(`${fdSrc}/b.txt`)
-        await delay(3000)
+        await tr.next((e) => e.type === 'done' && e.b, 'sync after remove')
+
+        //其後兩輪須無異動, 不再發送事件(原以固定等待觀察, 改以輪數觀察)
+        await tr.next((e) => e.type === 'done' && !e.b, 'idle round 1')
+        await tr.next((e) => e.type === 'done' && !e.b, 'idle round 2')
 
         //clear
         ev.clear()

@@ -7,6 +7,7 @@ import ot from 'dayjs'
 import WOrm from 'w-orm-lowdb/src/WOrmLowdb.mjs' //自行選擇引用ORM
 import WDataSourceFromCsv from '../src/WDataSourceFromCsv.mjs'
 import WDataSyncer from '../src/WDataSyncer.mjs'
+import { createRecorder, createGate } from './tools/syncerTraceKit.mjs'
 
 
 describe('syncer_orm', function() {
@@ -22,13 +23,22 @@ describe('syncer_orm', function() {
         w.fsCleanFolder(fdSrcCsv)
         w.fsCleanFolder(fdSrcDb)
 
-        let triggerData = () => {
-            let pm = w.genPm()
+        //以onTrace與被測物自身事件同步, 不以等待時間同步
+        let trSrc = createRecorder() //WDataSourceFromCsv(轉交fsWatchFolder之onTrace)
+        let trSyncer = createRecorder() //WDataSyncer
+        let gateCsv = createGate() //來源偵測到之change事件數
+        let gateDb = createGate() //同步至目標之change事件數
 
+        //每次寫入後預期來源偵測到(以及同步至目標)之change事件數, 第4筆因同時修改第3筆故為insert與save共2件
+        let numEvents = [1, 1, 1, 2, 1, 1, 1]
+
+        //triggerData, 每筆資料(含修改)寫入後, 等來源偵測到且同步至目標才寫下一筆, 使每筆各自被偵測與同步一次
+        let triggerData = async () => {
             let n = 0
             let i = -1
             let h = 0
-            let timer = setInterval(() => {
+            let num = 0
+            for (let numEvent of numEvents) {
                 n++
                 i++
                 let t = ot('2020-01-01T00:00:00', 'YYYY-MM-DDTHH:mm:ss')
@@ -49,13 +59,10 @@ describe('syncer_orm', function() {
                     n = 0
                     h++
                 }
-                if (h === 1 && n === 2) {
-                    clearInterval(timer)
-                    pm.resolve()
-                }
-            }, 3000)
-
-            return pm
+                num += numEvent
+                await gateCsv.until(num, 'source change')
+                await gateDb.until(num, 'syncer change')
+            }
         }
 
         let omSrc = null
@@ -63,10 +70,12 @@ describe('syncer_orm', function() {
             omSrc = WDataSourceFromCsv(fdSrcCsv, {
                 heads: ['id', 'value'],
                 key: 'id',
+                onTrace: trSrc.onTrace,
             })
             omSrc.on('change', (msg) => {
                 // console.log('WDataSourceFromCsv change msg', msg)
                 ms_csv.push({ 'detect data': `type[${msg.type}], data[${JSON.stringify(msg.ltdtFmt[0])}]` })
+                gateCsv.hit()
             })
         }
 
@@ -85,21 +94,28 @@ describe('syncer_orm', function() {
             src: omSrc,
             tar: omTar,
             key: 'id',
-            timeInterval: 1000, //每秒同步
+            timeInterval: 50, //同步間隔, 正確性不依賴其長短
+            onTrace: trSyncer.onTrace,
         })
         ev.on('change', (msg) => {
             // console.log('WDataSyncer change msg', msg)
             ms_db.push({ 'sync data': JSON.stringify(msg) })
+            gateDb.hit()
         })
         ev.on('change-all', (msg) => {
             // console.log('WDataSyncer change-all msg', msg)
         })
 
-        //triggerData
+        //等chokidar初始掃描完成, 其後新增之檔案才會被偵測到(原以首筆資料延後3s寫入隱含等待)
+        await trSrc.next((e) => e.type === 'ready', 'watcher ready')
+
+        //triggerData, 末筆資料亦等來源偵測到且同步至目標才結束
         await triggerData()
 
-        //delay, 延遲3s等WDataSourceFromCsv內fsWatchFolder讀檔觸發, 1s等timer觸發, 1s等誤差, 共5s
-        await w.delay(5000)
+        //其後兩輪同步須無異動, 不再發送事件(原以固定等待觀察, 改以輪數觀察)
+        trSyncer.skip()
+        await trSyncer.next((e) => e.type === 'done' && !e.b, 'idle round 1')
+        await trSyncer.next((e) => e.type === 'done' && !e.b, 'idle round 2')
 
         //clear
         omSrc.clear()

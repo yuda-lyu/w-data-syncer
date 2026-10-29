@@ -7,6 +7,7 @@ import isbol from 'wsemi/src/isbol.mjs'
 import isfun from 'wsemi/src/isfun.mjs'
 import cint from 'wsemi/src/cint.mjs'
 import getErrorMessage from 'wsemi/src/getErrorMessage.mjs'
+import getTrace from 'wsemi/src/getTrace.mjs'
 import syncByOrm from './syncByOrm.mjs'
 import syncByBuffer from './syncByBuffer.mjs'
 import syncBy1To1 from './syncBy1To1.mjs'
@@ -31,6 +32,7 @@ import syncByNTo1 from './syncByNTo1.mjs'
  * @param {boolean} [opt.waitEmitChange=false] - 發送 change 事件時是否等待監聽器 resolve
  * @param {boolean} [opt.waitEmitChangeAll=false] - 發送 change-all 事件時是否等待監聽器 resolve
  * @param {Object} [opt.srLog=null] - log 器，需提供 info、error 函數
+ * @param {Function} [opt.onTrace=null] - 觀察回調函數，於內部事件發生當下同步呼叫，傳入一個凍結之事件物件 { type, ... }，供測試以事件(而非等待時間)同步與診斷。type 為 'tick' 時為每次計時觸發(含 n 為累計第幾次觸發自 1 起，locked 為上一輪尚未結束而跳過本輪，為 true 時不會有後續 begin)；'begin' 時為一輪同步開始(含 round 為第幾輪自 1 起，只計實際執行之輪，跳過者不計)；'emit' 時為即將發送一個事件(含 round，name 為事件名稱 'insert'、'save'、'del'、'add'、'modify'、'remove'、'change'、'change-all'，kind 為 name 是 'change' 時之 type 否則為 null，size 為該事件 items 筆數，name 是 'change-all' 時為 null)；'fail' 時為一輪同步出錯且即將發送 error 事件(含 round，msg 為錯誤訊息字串，不傳出 Error 物件，請由 error 事件取得)；'done' 時為一輪同步結束且鎖已釋放(含 round，ok 為是否未出錯，b 為該輪是否有異動，bErr 為同步函數是否回報錯誤旗標)；'clear' 時為 clear 被呼叫(僅首次)。clear 後不再通知任何事件，進行中之輪的後續事件亦然。回調不帶接收者呼叫，其拋錯與回傳值(含回傳 Promise 之 rejection)皆忽略，不影響同步，預設 null
  * @returns {EventEmitter} 回傳事件發送器並提供 clear 函數停止同步。mode='by-orm' 可監聽 insert、save、del、change、change-all 事件；mode='by-buffer' 可監聽 change-all 事件；mode='by-1to1' 或 'by-nto1' 可監聽 add、modify、remove、change、change-all 事件；各模式皆可監聽 error 事件
  */
 function WDataSyncer(mode, opt = {}) {
@@ -102,11 +104,31 @@ function WDataSyncer(mode, opt = {}) {
         srLogError = () => {}
     }
 
+    //trace, 觀察回調(opt.onTrace), 未給時為null
+    let trace = getTrace(opt)
+
+    //cleared, 是否已clear, 供trace於clear後不再通知
+    let cleared = false
+
+    //round, info, 目前這一輪之序號與結果, 因有lock故同時只會有一輪, 供trace使用
+    let round = 0
+    let info = { ok: true, b: false, bErr: false }
+
     //ev
     let ev = evem()
 
     //emitWait
     let emitWait = async (name, data, useWait) => {
+        if (trace && !cleared) {
+            let isChange = name === 'change'
+            let items = isChange ? get(data, 'items') : data
+            trace('emit', {
+                round,
+                name,
+                kind: isChange ? get(data, 'type', null) : null,
+                size: name === 'change-all' ? null : size(items),
+            })
+        }
         if (useWait) {
             let pm = genPm()
             ev.emit(name, data, pm)
@@ -138,6 +160,10 @@ function WDataSyncer(mode, opt = {}) {
         else if (mode === 'by-nto1') {
             r = await syncByNTo1(opt)
         }
+
+        //info
+        info.b = get(r, 'b') === true
+        info.bErr = get(r, 'bErr') === true
 
         //check, 跳過同步或無異動時不發送事件
         if (!get(r, 'b')) {
@@ -188,7 +214,14 @@ function WDataSyncer(mode, opt = {}) {
 
     //timer
     let lock = false
+    let nTick = 0
     let timer = setInterval(() => {
+
+        //trace
+        nTick++
+        if (trace && !cleared) {
+            trace('tick', { n: nTick, locked: lock })
+        }
 
         //check
         if (lock) {
@@ -197,22 +230,40 @@ function WDataSyncer(mode, opt = {}) {
         }
         lock = true
 
+        //round, info
+        round++
+        info = { ok: true, b: false, bErr: false }
+        if (trace && !cleared) {
+            trace('begin', { round })
+        }
+
         //compareAndSync
         srLogInfo({ event: 'compareAndSync', msg: 'start...' })
         compareAndSync()
             .catch((err) => {
+                info.ok = false
                 srLogError({ event: 'compareAndSync', msg: getErrorMessage(err) })
+                if (trace && !cleared) {
+                    trace('fail', { round, msg: getErrorMessage(err) })
+                }
                 ev.emit('error', err)
             })
             .finally(() => {
                 srLogInfo({ event: 'compareAndSync', msg: 'done' })
                 lock = false
+                if (trace && !cleared) {
+                    trace('done', { round, ok: info.ok, b: info.b, bErr: info.bErr })
+                }
             })
 
     }, timeInterval)
 
     //clear
     let clear = () => {
+        if (trace && !cleared) {
+            trace('clear', {})
+        }
+        cleared = true
         clearInterval(timer)
     }
 
