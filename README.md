@@ -11,6 +11,11 @@ A tool for data detection and synchronization.
 ## Documentation
 To view documentation or get support, visit [docs](https://yuda-lyu.github.io/w-data-syncer/global.html).
 
+## Breaking changes
+
+### Unreleased
+- `mode='by-buffer'`: each round now gets its own download-history folder (under `fdFromStorageTempHists`) and completion-state file (under `fdFromStorageTempHistStates`), even when several rounds run within the same second. Previously both were named by a 14-digit second-level timestamp (`YYYYMMDDHHmmss`), so rounds within the same second shared one folder, and files left by an earlier round (or by a failed round) could remain in the folder of the next round. The name is now a 20-digit string: 17-digit millisecond timestamp (`YYYYMMDDHHmmssSSS`) plus a 3-digit sequence that increases within the same millisecond (`000`–`999`; when all 1000 are used within one millisecond the round throws `too many rounds within the same millisecond`). Names still sort in the order the rounds ran, so `numKeep` still keeps the newest rounds. Impact: code that reads these folder names expecting 14 digits must be adjusted; a `funGetFiles` that relied on a same-second round reusing the previous round's folder (instead of cleaning or rewriting the `fdDw` it is given) no longer sees those files. Folders left by earlier versions (14 digits) sort before the new names and are removed by `numKeep` as usual.
+
 ## Installation
 
 ### Using npm(ES6 module):

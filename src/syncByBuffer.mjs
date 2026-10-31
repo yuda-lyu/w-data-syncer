@@ -13,7 +13,7 @@ import isestr from 'wsemi/src/isestr.mjs'
 import isfun from 'wsemi/src/isfun.mjs'
 import isint from 'wsemi/src/isint.mjs'
 import haskey from 'wsemi/src/haskey.mjs'
-import now2strp from 'wsemi/src/now2strp.mjs'
+import nowms2strp from 'wsemi/src/nowms2strp.mjs'
 import pmSeries from 'wsemi/src/pmSeries.mjs'
 import fsIsFile from 'wsemi/src/fsIsFile.mjs'
 import fsIsFolder from 'wsemi/src/fsIsFolder.mjs'
@@ -53,6 +53,44 @@ function writeJson(fp, obj, opt = {}) {
     if (rt.error) {
         throw new Error(rt.error)
     }
+}
+
+
+//歷史名稱長度: 17碼毫秒時間戳(YYYYMMDDHHmmssSSS)+3碼序號
+let lenHistMs = 17
+let lenHistSeq = 3
+
+
+/**
+ * 產生本輪下載歷史之唯一名稱, 此名稱同時為歷史資料夾名與完成狀態檔名
+ * 格式為20碼數字: 17碼毫秒時間戳+3碼序號. 同一毫秒內已有名稱(歷史資料夾或完成狀態檔)時, 序號取該毫秒內已用最大序號加1,
+ * 使各輪名稱不重複, 且名稱依字典序排序恆等於產生順序(歷史保留數量之淘汰與同名檔取最新版皆依此排序), 序號不回收已刪除者
+ * @param {String} fdHists - 下載歷史資料夾所在之資料夾
+ * @param {String} fdHistStates - 完成狀態檔所在之資料夾
+ * @returns {String} 回傳20碼數字名稱
+ */
+function genHistName(fdHists, fdHistStates) {
+
+    //msp
+    let msp = nowms2strp()
+
+    //seq, 同一毫秒內已用最大序號加1
+    let seq = 0
+    each([fdHists, fdHistStates], (fd) => {
+        each(fsTreeFolder(fd, 1), (v) => {
+            let name = v.name
+            if (name.length === lenHistMs + lenHistSeq && name.startsWith(msp)) {
+                seq = Math.max(seq, cint(name.slice(lenHistMs)) + 1)
+            }
+        })
+    })
+
+    //check
+    if (seq >= 10 ** lenHistSeq) {
+        throw new Error(`too many rounds within the same millisecond[${msp}]`)
+    }
+
+    return `${msp}${String(seq).padStart(lenHistSeq, '0')}`
 }
 
 
@@ -153,8 +191,8 @@ let syncByBuffer = async (funGetFiles, opt = {}) => {
 
     srLogInfo({ event: 'proc', msg: 'start...', time: ts.format('YYYY-MM-DDTHH:mm:ssZ') })
 
-    //fdn
-    let fdn = now2strp()
+    //fdn, 本輪下載歷史之唯一名稱, 不撞名故各輪歷史資料夾與完成狀態檔彼此獨立
+    let fdn = genHistName(fdFromStorageTempHists, fdFromStorageTempHistStates)
     // console.log('fdn', fdn)
 
     //fdDw

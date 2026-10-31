@@ -3,6 +3,7 @@ import fs from 'fs'
 import map from 'lodash-es/map.js'
 import get from 'lodash-es/get.js'
 import filter from 'lodash-es/filter.js'
+import sortBy from 'lodash-es/sortBy.js'
 import fsTreeFolder from 'wsemi/src/fsTreeFolder.mjs'
 import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
 import fsDeleteFolder from 'wsemi/src/fsDeleteFolder.mjs'
@@ -24,8 +25,18 @@ describe('syncer_1to1', function() {
         fsDeleteFolder(fdTar)
     }
 
+    //snapshot, 目標夾之實際檔案內容(依檔名排序), 供驗證同步之落地結果而非僅事件
+    let snapshot = (fd) => {
+        let vfps = filter(fsTreeFolder(fd, 1), { isFolder: false })
+        vfps = sortBy(vfps, 'name')
+        return map(vfps, (v) => `${v.name}=${fs.readFileSync(v.path, 'utf8')}`).join(', ')
+    }
+
     let test = async () => {
         let ms = []
+
+        //tars, 各階段(某輪同步結束時)目標夾之實際檔案內容
+        let tars = []
 
         clean()
         fsCreateFolder(fdSrc)
@@ -69,28 +80,48 @@ describe('syncer_1to1', function() {
             ms.push({ 'change-all data': JSON.stringify({ b: get(rr, 'b'), bErr: get(rr, 'bErr'), add: map(get(rr, 'add'), 'id'), modify: map(get(rr, 'modify'), 'id'), remove: map(get(rr, 'remove'), 'id'), same: map(get(rr, 'same'), 'id') }) })
         })
 
-        //等首次同步(有異動之輪結束)
+        //等首次同步(有異動之輪結束), 該輪結束後同一回合內即取目標夾快照, 不與下一輪重疊
         await tr.next((e) => e.type === 'done' && e.b, 'first sync')
+        tars.push({ 'tar after add': snapshot(fdTar) })
 
         //修改
         fs.writeFileSync(`${fdSrc}/a.txt`, 'A2', 'utf8')
         await tr.next((e) => e.type === 'done' && e.b, 'sync after modify')
+        tars.push({ 'tar after modify': snapshot(fdTar) })
 
         //刪除
         fs.unlinkSync(`${fdSrc}/b.txt`)
         await tr.next((e) => e.type === 'done' && e.b, 'sync after remove')
+        tars.push({ 'tar after remove': snapshot(fdTar) })
 
         //其後兩輪須無異動, 不再發送事件(原以固定等待觀察, 改以輪數觀察)
         await tr.next((e) => e.type === 'done' && !e.b, 'idle round 1')
         await tr.next((e) => e.type === 'done' && !e.b, 'idle round 2')
+        tars.push({ 'tar after idle': snapshot(fdTar) })
 
         //clear
         ev.clear()
 
         clean()
 
-        return ms
+        return { ms, tars }
     }
+
+    //目標夾之落地結果: 新增後兩檔皆為首版內容, 修改後a.txt為新內容且b.txt不變, 刪除後b.txt已自目標夾移除, 其後無異動則維持不變
+    let tars = [
+        {
+            'tar after add': 'a.txt=A1, b.txt=B1'
+        },
+        {
+            'tar after modify': 'a.txt=A2, b.txt=B1'
+        },
+        {
+            'tar after remove': 'a.txt=A2'
+        },
+        {
+            'tar after idle': 'a.txt=A2'
+        }
+    ]
 
     let ms = [
         {
@@ -122,10 +153,20 @@ describe('syncer_1to1', function() {
         }
     ]
 
-    it(`should return '${JSON.stringify(ms)}' when run test'`, async function() {
-        let r = await test()
+    //同一次執行同時供事件與目標夾兩個斷言使用
+    let r = null
+    before(async function() {
+        r = await test()
+    })
+
+    it(`should return '${JSON.stringify(ms)}' when run test'`, function() {
         let rr = ms
-        assert.strict.deepStrictEqual(r, rr)
+        assert.strict.deepStrictEqual(r.ms, rr)
+    })
+
+    it(`should leave target folder as '${JSON.stringify(tars)}' when run test'`, function() {
+        let rr = tars
+        assert.strict.deepStrictEqual(r.tars, rr)
     })
 
 })

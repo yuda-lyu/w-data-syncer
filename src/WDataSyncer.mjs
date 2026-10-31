@@ -21,7 +21,7 @@ import syncByNTo1 from './syncByNTo1.mjs'
  * @param {Object} [opt.src] - mode='by-orm' 時之資料來源，需提供 select 函數 (async)
  * @param {Object} [opt.tar] - mode='by-orm' 時之資料目標，需提供 select、insert、save、del 函數 (async)
  * @param {String} [opt.key='time'] - mode='by-orm' 時用於排序與比對的 key
- * @param {Function} [opt.funGetFiles] - mode='by-buffer' 時取得來源檔案的函數 (async)
+ * @param {Function} [opt.funGetFiles] - mode='by-buffer' 時取得來源檔案的函數 (async)，呼叫時傳入 (fdDw, opt)，fdDw 為本輪專屬之下載歷史資料夾路徑，其名稱為20碼數字(17碼毫秒時間戳+3碼序號，同一毫秒內序號遞增)，各輪互異不共用，依名稱排序即為各輪順序；同一毫秒內超過1000輪時該輪拋錯
  * @param {Function} [opt.funGetVfpsSrc] - mode='by-1to1' 或 'by-nto1' 時取得來源檔案清單的函數 (async)
  * @param {Function} [opt.funProc] - mode='by-1to1' 或 'by-nto1' 時處理檔案的函數 (async)
  * @param {Function} [opt.funRemove] - mode='by-1to1' 時移除檔案的函數 (async)
