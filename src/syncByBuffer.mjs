@@ -12,7 +12,6 @@ import isbol from 'wsemi/src/isbol.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import isfun from 'wsemi/src/isfun.mjs'
 import isint from 'wsemi/src/isint.mjs'
-import haskey from 'wsemi/src/haskey.mjs'
 import nowms2strp from 'wsemi/src/nowms2strp.mjs'
 import pmSeries from 'wsemi/src/pmSeries.mjs'
 import fsIsFile from 'wsemi/src/fsIsFile.mjs'
@@ -252,55 +251,37 @@ let syncByBuffer = async (funGetFiles, opt = {}) => {
         vfpsState = sortBy(vfpsState, 'name') //與vfds同基準升序, 保持兩者對應一致
         // console.log('vfpsState', vfpsState, size(vfpsState))
 
-        //n
-        let n = size(vfds)
+        //以名稱集合逐一對應, 清除下載未完成之時間資料夾(無完成狀態檔)與無時間資料夾之完成狀態檔, 不以兩者數量差判斷(數量相同而集合不同時亦須清除)
+        if (true) {
 
-        //nn
-        let nn = size(vfpsState)
+            //kpFd, 時間資料夾名稱之集合
+            let kpFd = new Set(map(vfds, 'name'))
 
-        //check
-        if (n < nn) {
+            //kpState, 完成狀態檔名稱之集合
+            let kpState = new Set(map(vfpsState, 'name'))
 
-            //kp, 建置時間資料夾之字典物件
-            let kp = {}
-            each(vfds, (v) => {
-                kp[v.name] = true
+            //vfds, 僅保留有完成狀態之時間資料夾
+            vfds = filter(vfds, (v) => {
+                if (kpState.has(v.name)) {
+                    return true
+                }
+                fsDeleteFolder(v.path)
+                return false
             })
 
             //vfpsState, 僅保留有時間資料夾之完成狀態檔案
-            let _vfpsState = []
-            each(vfpsState, (v) => {
-                if (haskey(kp, v.name)) {
-                    _vfpsState.push(v)
+            vfpsState = filter(vfpsState, (v) => {
+                if (kpFd.has(v.name)) {
+                    return true
                 }
-                else {
-                    fsDeleteFile(v.path)
-                }
+                fsDeleteFile(v.path)
+                return false
             })
-            vfpsState = _vfpsState
 
         }
-        else if (n > nn) {
 
-            //kp, 建置完成狀態之字典物件
-            let kp = {}
-            each(vfpsState, (v) => {
-                kp[v.name] = true
-            })
-
-            //vfds, 僅保留有完成狀態之時間資料夾
-            let _vfds = []
-            each(vfds, (v) => {
-                if (haskey(kp, v.name)) {
-                    _vfds.push(v)
-                }
-                else {
-                    fsDeleteFolder(v.path)
-                }
-            })
-            vfds = _vfds
-
-        }
+        //n, 清除不完整者後之完整輪數, vfds與vfpsState此時名稱一一對應
+        let n = size(vfds)
 
         //m
         let m = 0

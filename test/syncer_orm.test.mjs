@@ -17,6 +17,9 @@ describe('syncer_orm', function() {
         let ms_csv = []
         let ms_db = []
 
+        //tars, 各階段(來源偵測到且同步至目標後)目標omTar(lowdb)之實際資料
+        let tars = []
+
         let fdSrcCsv = `./_test_syncer_csv`
         let fdSrcDb = `./_test_syncer_db`
 
@@ -31,6 +34,13 @@ describe('syncer_orm', function() {
 
         //每次寫入後預期來源偵測到(以及同步至目標)之change事件數, 第4筆因同時修改第3筆故為insert與save共2件
         let numEvents = [1, 1, 1, 2, 1, 1, 1]
+
+        //snapshotTar, 目標之實際資料(依id排序, 每列為id=value), 供驗證同步之落地結果而非僅事件
+        let snapshotTar = async () => {
+            let ltdt = await omTar.select()
+            ltdt = _.sortBy(ltdt, 'id')
+            return _.map(ltdt, (v) => `${v.id}=${v.value}`)
+        }
 
         //triggerData, 每筆資料(含修改)寫入後, 等來源偵測到且同步至目標才寫下一筆, 使每筆各自被偵測與同步一次
         let triggerData = async () => {
@@ -62,7 +72,22 @@ describe('syncer_orm', function() {
                 num += numEvent
                 await gateCsv.until(num, 'source change')
                 await gateDb.until(num, 'syncer change')
+
+                //同步事件發送時目標已寫入, 且下一筆尚未寫入來源, 此時取目標快照不與下一輪重疊
+                tars.push({ [`tar after write i=${i}`]: await snapshotTar() })
             }
+
+            //replace, h1.csv之00:06:00列改為00:07:00列, 來源筆數不變, 故目標刪除00:06:00(del)且新增00:07:00(insert)
+            let fp = `${fdSrcCsv}/h1.csv`
+            let c = fs.readFileSync(fp, 'utf8')
+            c = c.replace(`2020-01-01T00:06:00, 123.007`, `2020-01-01T00:07:00, 123.008`)
+            fs.writeFileSync(fp, c, 'utf8')
+            ms_trigger.push({ 'replace data': 'h1, 00:06:00(123.007)->00:07:00(123.008)' })
+            num += 2 //來源與同步皆為insert與del共2件
+            await gateCsv.until(num, 'source change(replace)')
+            await gateDb.until(num, 'syncer change(replace)')
+            tars.push({ 'tar after replace': await snapshotTar() })
+            return num
         }
 
         let omSrc = null
@@ -109,13 +134,29 @@ describe('syncer_orm', function() {
         //等chokidar初始掃描完成, 其後新增之檔案才會被偵測到(原以首筆資料延後3s寫入隱含等待)
         await trSrc.next((e) => e.type === 'ready', 'watcher ready')
 
-        //triggerData, 末筆資料亦等來源偵測到且同步至目標才結束
-        await triggerData()
+        //triggerData, 末筆資料(含其後之replace)亦等來源偵測到且同步至目標才結束
+        let num = await triggerData()
 
-        //其後兩輪同步須無異動, 不再發送事件(原以固定等待觀察, 改以輪數觀察)
+        //其後兩輪同步須無異動, 不再發送事件(原以固定等待觀察, 改以輪數觀察), 且目標維持不變
         trSyncer.skip()
         await trSyncer.next((e) => e.type === 'done' && !e.b, 'idle round 1')
         await trSyncer.next((e) => e.type === 'done' && !e.b, 'idle round 2')
+        tars.push({ 'tar after idle': await snapshotTar() })
+
+        //shrink, 刪去h1.csv之00:07:00列使來源筆數(6)少於目標(7): 來源偵測到del, 但同步依規則跳過(不同步刪除), 目標維持不變
+        if (true) {
+            let fp = `${fdSrcCsv}/h1.csv`
+            let c = fs.readFileSync(fp, 'utf8')
+            c = c.replace(`2020-01-01T00:07:00, 123.008\n`, ``)
+            fs.writeFileSync(fp, c, 'utf8')
+            ms_trigger.push({ 'shrink data': 'h1, remove 00:07:00(123.008)' })
+            num += 1 //來源只偵測到del共1件, 同步不發送事件
+            await gateCsv.until(num, 'source change(shrink)')
+            trSyncer.skip()
+            await trSyncer.next((e) => e.type === 'done' && !e.b, 'idle round 3')
+            await trSyncer.next((e) => e.type === 'done' && !e.b, 'idle round 4')
+            tars.push({ 'tar after source shrinks': await snapshotTar() })
+        }
 
         //clear
         omSrc.clear()
@@ -132,7 +173,7 @@ describe('syncer_orm', function() {
         ]
         // console.log('ms', ms)
         // fs.writeFileSync('./temp.json', JSON.stringify(ms), 'utf8')
-        return ms
+        return { ms, tars }
     }
     // await test()
     //     .catch((err) => {
@@ -147,6 +188,8 @@ describe('syncer_orm', function() {
         { 'push data': 'i=4, n=5' },
         { 'push data': 'i=5, n=1' },
         { 'push data': 'i=6, n=2' },
+        { 'replace data': 'h1, 00:06:00(123.007)->00:07:00(123.008)' },
+        { 'shrink data': 'h1, remove 00:07:00(123.008)' },
         {
             'detect data': 'type[insert], data[{"id":"2020-01-01T00:00:00","value":" 123.001"}]'
         },
@@ -172,6 +215,15 @@ describe('syncer_orm', function() {
             'detect data': 'type[insert], data[{"id":"2020-01-01T00:06:00","value":" 123.007"}]'
         },
         {
+            'detect data': 'type[insert], data[{"id":"2020-01-01T00:07:00","value":" 123.008"}]'
+        },
+        {
+            'detect data': 'type[del], data[{"id":"2020-01-01T00:06:00","value":" 123.007"}]'
+        },
+        {
+            'detect data': 'type[del], data[{"id":"2020-01-01T00:07:00","value":" 123.008"}]'
+        },
+        {
             'sync data': '{"type":"insert","items":[{"id":"2020-01-01T00:00:00","value":" 123.001"}]}'
         },
         {
@@ -194,13 +246,44 @@ describe('syncer_orm', function() {
         },
         {
             'sync data': '{"type":"insert","items":[{"id":"2020-01-01T00:06:00","value":" 123.007"}]}'
+        },
+        {
+            'sync data': '{"type":"insert","items":[{"id":"2020-01-01T00:07:00","value":" 123.008"}]}'
+        },
+        {
+            'sync data': '{"type":"del","items":[{"id":"2020-01-01T00:06:00","value":" 123.007"}]}'
         }
     ]
 
-    it(`should return '${JSON.stringify(ms)}' when run test'`, async function() {
-        let r = await test()
+    //目標omTar之落地結果(每列id=value, 依id排序): 逐筆新增、第4筆時00:02:00修改為234.903、replace後00:06:00已刪除且00:07:00已新增、無異動維持不變、來源筆數少於目標時目標不隨來源刪除
+    let row = (mm, v) => `2020-01-01T00:${mm}:00= ${v}`
+    let tars = [
+        { 'tar after write i=0': [row('00', '123.001')] },
+        { 'tar after write i=1': [row('00', '123.001'), row('01', '123.002')] },
+        { 'tar after write i=2': [row('00', '123.001'), row('01', '123.002'), row('02', '123.003')] },
+        { 'tar after write i=3': [row('00', '123.001'), row('01', '123.002'), row('02', '234.903'), row('03', '123.004')] },
+        { 'tar after write i=4': [row('00', '123.001'), row('01', '123.002'), row('02', '234.903'), row('03', '123.004'), row('04', '123.005')] },
+        { 'tar after write i=5': [row('00', '123.001'), row('01', '123.002'), row('02', '234.903'), row('03', '123.004'), row('04', '123.005'), row('05', '123.006')] },
+        { 'tar after write i=6': [row('00', '123.001'), row('01', '123.002'), row('02', '234.903'), row('03', '123.004'), row('04', '123.005'), row('05', '123.006'), row('06', '123.007')] },
+        { 'tar after replace': [row('00', '123.001'), row('01', '123.002'), row('02', '234.903'), row('03', '123.004'), row('04', '123.005'), row('05', '123.006'), row('07', '123.008')] },
+        { 'tar after idle': [row('00', '123.001'), row('01', '123.002'), row('02', '234.903'), row('03', '123.004'), row('04', '123.005'), row('05', '123.006'), row('07', '123.008')] },
+        { 'tar after source shrinks': [row('00', '123.001'), row('01', '123.002'), row('02', '234.903'), row('03', '123.004'), row('04', '123.005'), row('05', '123.006'), row('07', '123.008')] },
+    ]
+
+    //同一次執行同時供事件與目標資料兩個斷言使用
+    let r = null
+    before(async function() {
+        r = await test()
+    })
+
+    it(`should return '${JSON.stringify(ms)}' when run test'`, function() {
         let rr = ms
-        assert.strict.deepStrictEqual(r, rr)
+        assert.strict.deepStrictEqual(r.ms, rr)
+    })
+
+    it(`should leave target data as '${JSON.stringify(tars)}' when run test'`, function() {
+        let rr = tars
+        assert.strict.deepStrictEqual(r.tars, rr)
     })
 
 })

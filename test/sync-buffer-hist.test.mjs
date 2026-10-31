@@ -31,13 +31,14 @@ describe('sync-buffer-hist', function() {
         fsDeleteFolder(fdRoot)
     }
 
-    let mkOpt = (numKeep = 10) => {
+    let mkOpt = (numKeep = 10, extra = {}) => {
         return {
             numKeep,
             fdFromStorageTempHists: fdHists,
             fdFromStorageTempHistStates: fdHistStates,
             fdFromStorageTemp: fdTemp,
             fdFromStorage: fdStorage,
+            ...extra,
         }
     }
 
@@ -273,6 +274,175 @@ describe('sync-buffer-hist', function() {
         assert.strict.deepStrictEqual(map(folders, listFilesIn), [['r1.txt'], ['r2.txt'], ['r3.txt'], ['r4.txt'], ['r5.txt']])
         assert.strict.deepStrictEqual(listNames(fdHistStates, false), folders)
         assert.strict.deepStrictEqual(snapshot(fdStorage), 'r1.txt=R1, r2.txt=R2, r3.txt=R3, r4.txt=R4, r5.txt=R5')
+    })
+
+    //歷史資料夾與完成狀態檔之配對清理: 以名稱集合逐一對應, 不得以兩者數量差判斷
+    //  完成之一輪=同名之歷史資料夾與完成狀態檔皆存在; 只有資料夾(下載未完成)或只有狀態檔(資料夾已被刪)者為不完整, 須被清除且其檔案不得進入儲存區
+    //  seed 以 20200101 開頭之 14 碼名稱, 排序上早於本輪新名稱
+    describe('pairing cleanup by name set', function() {
+
+        let nameA = '20200101000001'
+        let nameB = '20200101000002'
+        let nameC = '20200101000003'
+        let nameD = '20200101000004'
+        let nameE = '20200101000005'
+
+        //seedFolder, 建立歷史資料夾並寫入一個檔案
+        let seedFolder = (name, fn, c) => {
+            fsCreateFolder(`${fdHists}/${name}`)
+            fs.writeFileSync(`${fdHists}/${name}/${fn}`, c, 'utf8')
+        }
+
+        //seedState, 建立完成狀態檔
+        let seedState = (name) => {
+            fsCreateFolder(fdHistStates)
+            fsWriteText(`${fdHistStates}/${name}`, 'done')
+        }
+
+        //mkLog, 收集 srLog.error 之紀錄
+        let mkLog = () => {
+            let errors = []
+            return {
+                errors,
+                srLog: {
+                    info: () => {},
+                    error: (e) => {
+                        errors.push(e)
+                    },
+                },
+            }
+        }
+
+        //seedRounds, 配對完整之一輪(資料夾與完成狀態檔)
+        let seedRound = (name, fn, c) => {
+            seedFolder(name, fn, c)
+            seedState(name)
+        }
+
+        beforeEach(function() {
+            fsCreateFolder(fdHists)
+            fsCreateFolder(fdHistStates)
+        })
+
+        it(`should drop an incomplete folder and an orphan state file and keep neither in storage when their counts are equal`, async function() {
+            //資料夾 2 個(B 無狀態檔), 狀態檔 2 個(A 無資料夾), 本輪完成後兩者皆為 2 個, 但名稱集合不同
+            seedFolder(nameB, 'partial.txt', 'PARTIAL')
+            seedState(nameA)
+
+            let lg = mkLog()
+            await runRound(1, mkOpt(10, { srLog: lg.srLog }))
+
+            //只剩本輪; 不完整之 B 資料夾與無資料夾之 A 狀態檔皆清除
+            let folders = listNames(fdHists, true)
+            assert.strict.deepStrictEqual(map(folders, listFilesIn), [['r1.txt']])
+            assert.strict.deepStrictEqual(listNames(fdHistStates, false), folders)
+
+            //未完成資料夾之檔案不得進入儲存區
+            assert.strict.deepStrictEqual(snapshot(fdStorage), 'r1.txt=R1')
+            assert.strict.deepStrictEqual(lg.errors, [])
+        })
+
+        it(`should keep a complete older round and drop only the mismatched ones when counts are equal`, async function() {
+            //資料夾 A(完整)、B(無狀態檔)、狀態檔 A、C(無資料夾), 加本輪後兩者皆 3 個
+            seedRound(nameA, 'a.txt', 'A')
+            seedFolder(nameB, 'partial.txt', 'PARTIAL')
+            seedState(nameC)
+
+            let lg = mkLog()
+            await runRound(1, mkOpt(10, { srLog: lg.srLog }))
+
+            let folders = listNames(fdHists, true)
+            assert.strict.deepStrictEqual(folders.length, 2)
+            assert.strict.deepStrictEqual(folders[0], nameA)
+            assert.strict.deepStrictEqual(map(folders, listFilesIn), [['a.txt'], ['r1.txt']])
+            assert.strict.deepStrictEqual(listNames(fdHistStates, false), folders)
+            assert.strict.deepStrictEqual(snapshot(fdStorage), 'a.txt=A, r1.txt=R1')
+            assert.strict.deepStrictEqual(lg.errors, [])
+        })
+
+        it(`should also drop orphan state files when there are more folders than state files`, async function() {
+            //資料夾 A(完整)、B、C(無狀態檔), 狀態檔 A、D(無資料夾), 加本輪後資料夾 4 個多於狀態檔 3 個
+            seedRound(nameA, 'a.txt', 'A')
+            seedFolder(nameB, 'partialB.txt', 'PB')
+            seedFolder(nameC, 'partialC.txt', 'PC')
+            seedState(nameD)
+
+            let lg = mkLog()
+            await runRound(1, mkOpt(10, { srLog: lg.srLog }))
+
+            let folders = listNames(fdHists, true)
+            assert.strict.deepStrictEqual(map(folders, listFilesIn), [['a.txt'], ['r1.txt']])
+            assert.strict.deepStrictEqual(listNames(fdHistStates, false), folders)
+            assert.strict.deepStrictEqual(snapshot(fdStorage), 'a.txt=A, r1.txt=R1')
+            assert.strict.deepStrictEqual(lg.errors, [])
+        })
+
+        it(`should also drop incomplete folders when there are more state files than folders`, async function() {
+            //資料夾 A(完整)、B(無狀態檔), 狀態檔 A、C、D(無資料夾), 加本輪後狀態檔 4 個多於資料夾 3 個
+            seedRound(nameA, 'a.txt', 'A')
+            seedFolder(nameB, 'partial.txt', 'PARTIAL')
+            seedState(nameC)
+            seedState(nameD)
+
+            let lg = mkLog()
+            await runRound(1, mkOpt(10, { srLog: lg.srLog }))
+
+            let folders = listNames(fdHists, true)
+            assert.strict.deepStrictEqual(map(folders, listFilesIn), [['a.txt'], ['r1.txt']])
+            assert.strict.deepStrictEqual(listNames(fdHistStates, false), folders)
+            assert.strict.deepStrictEqual(snapshot(fdStorage), 'a.txt=A, r1.txt=R1')
+            assert.strict.deepStrictEqual(lg.errors, [])
+        })
+
+        it(`should not evict a complete round because of an incomplete folder when the complete rounds do not exceed numKeep`, async function() {
+            //完整 A、C 加本輪共 3 輪, numKeep 為 3 須全留; 不完整之 B 夾位於 A 與 C 之間(資料夾 4 個多於狀態檔 3 個)
+            seedRound(nameA, 'a.txt', 'A')
+            seedFolder(nameB, 'partial.txt', 'PARTIAL')
+            seedRound(nameC, 'c.txt', 'C')
+
+            let lg = mkLog()
+            await runRound(1, mkOpt(3, { srLog: lg.srLog }))
+
+            let folders = listNames(fdHists, true)
+            assert.strict.deepStrictEqual(map(folders, listFilesIn), [['a.txt'], ['c.txt'], ['r1.txt']])
+            assert.strict.deepStrictEqual(listNames(fdHistStates, false), folders)
+            assert.strict.deepStrictEqual(snapshot(fdStorage), 'a.txt=A, c.txt=C, r1.txt=R1')
+            assert.strict.deepStrictEqual(lg.errors, [])
+        })
+
+        it(`should keep the newest numKeep complete rounds, never an incomplete folder, when mismatched names are mixed in`, async function() {
+            //完整 A、B、C 加本輪共 4 輪, numKeep 為 2 只留最新 2 輪(C 與本輪); 不完整之 D 夾與無資料夾之 E 狀態檔夾雜其中, 兩者數量相等
+            seedRound(nameA, 'a.txt', 'A')
+            seedRound(nameB, 'b.txt', 'B')
+            seedRound(nameC, 'c.txt', 'C')
+            seedFolder(nameD, 'partial.txt', 'PARTIAL')
+            seedState(nameE)
+
+            let lg = mkLog()
+            await runRound(1, mkOpt(2, { srLog: lg.srLog }))
+
+            let folders = listNames(fdHists, true)
+            assert.strict.deepStrictEqual(map(folders, listFilesIn), [['c.txt'], ['r1.txt']])
+            assert.strict.deepStrictEqual(listNames(fdHistStates, false), folders)
+            assert.strict.deepStrictEqual(snapshot(fdStorage), 'c.txt=C, r1.txt=R1')
+            assert.strict.deepStrictEqual(lg.errors, [])
+        })
+
+        it(`should leave complete rounds untouched when every folder has its own state file`, async function() {
+            //完整配對不受清理影響(回歸): A、B 完整, numKeep 為 10
+            seedRound(nameA, 'a.txt', 'A')
+            seedRound(nameB, 'b.txt', 'B')
+
+            let lg = mkLog()
+            await runRound(1, mkOpt(10, { srLog: lg.srLog }))
+
+            let folders = listNames(fdHists, true)
+            assert.strict.deepStrictEqual(map(folders, listFilesIn), [['a.txt'], ['b.txt'], ['r1.txt']])
+            assert.strict.deepStrictEqual(listNames(fdHistStates, false), folders)
+            assert.strict.deepStrictEqual(snapshot(fdStorage), 'a.txt=A, b.txt=B, r1.txt=R1')
+            assert.strict.deepStrictEqual(lg.errors, [])
+        })
+
     })
 
 })
