@@ -1,14 +1,14 @@
 {
   "name": "w-data-syncer",
-  "version": "1.0.58",
+  "version": "1.0.59",
   "main": "dist/w-data-syncer.umd.js",
   "dependencies": {
-    "w-data-csv": "^1.0.51",
-    "wsemi": "^1.9.55"
+    "w-data-csv": "^1.0.52",
+    "wsemi": "^1.9.56"
   },
   "devDependencies": {
-    "w-orm-lowdb": "^1.0.52",
-    "w-package-tools": "^1.1.25"
+    "w-orm-lowdb": "^1.0.54",
+    "w-package-tools": "^1.1.26"
   },
   "scripts": {
     "test": "mocha --parallel \"test/*.test.mjs\" --timeout 180000",
