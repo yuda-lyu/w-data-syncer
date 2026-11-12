@@ -4,6 +4,7 @@ import map from 'lodash-es/map.js'
 import size from 'lodash-es/size.js'
 import sortBy from 'lodash-es/sortBy.js'
 import isestr from 'wsemi/src/isestr.mjs'
+import isarr from 'wsemi/src/isarr.mjs'
 import isearr from 'wsemi/src/isearr.mjs'
 import isfun from 'wsemi/src/isfun.mjs'
 import haskey from 'wsemi/src/haskey.mjs'
@@ -13,11 +14,11 @@ import ltdtDiffByKey from 'wsemi/src/ltdtDiffByKey.mjs'
 /**
  * 資料單向同步一次
  * @param {Object} src - 資料來源，需提供 select 函數 (async)
- * @param {Object} tar - 資料目標，需提供 select、insert、save、del 函數 (async)
+ * @param {Object} tar - 資料目標，需提供 select、insert、save、del 函數 (async)，其中 select 須回傳陣列(目標尚無資料時為空陣列)，回傳非陣列(undefined、null、物件、字串、數字等)不視同空陣列，記錄錯誤事件(event 為 syncByOrm-selectTar)並拋錯中止本輪，目標端不寫入
  * @param {Object} opt - 設定物件
  * @param {String} [opt.key='time'] - 用於排序與比對的 key
  * @param {Object} [opt.srLog=null] - log 器，需提供 info、error 函數
- * @returns {Promise} 回傳分類結果物件 { b, insert, save, del, same }，b 代表是否有異動，來源無資料或筆數少於目標時跳過並回傳 null
+ * @returns {Promise} 回傳分類結果物件 { b, insert, save, del, same }，b 代表是否有異動，來源無資料或筆數少於目標時跳過並回傳 null；tar.select 回傳非陣列時拋錯(Error 訊息為固定文字，不帶回傳值)，與來源無資料之略過分開
  */
 async function syncByOrm(src, tar, opt = {}) {
 
@@ -59,6 +60,12 @@ async function syncByOrm(src, tar, opt = {}) {
     let ltdtTar = await tar.select()
     srLogInfo({ event: `syncByOrm-selectTar`, msg: 'done' })
     // console.log('ltdtTar', ltdtTar)
+
+    //check, 目標資料須為陣列(尚無資料時為空陣列), 非陣列不視同空陣列, 否則來源會全數被當成新增, 故記錄錯誤事件並中止本輪, 與上方來源無資料之略過分開
+    if (!isarr(ltdtTar)) {
+        srLogError({ event: `syncByOrm-selectTar`, msg: `invalid tar.select result: must be an array` })
+        throw new Error(`invalid tar.select result: must be an array`)
+    }
 
     //check
     if (size(ltdtSrc) < size(ltdtTar)) {

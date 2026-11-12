@@ -1,6 +1,7 @@
 import get from 'lodash-es/get.js'
 import size from 'lodash-es/size.js'
 import isEqual from 'lodash-es/isEqual.js'
+import isarr from 'wsemi/src/isarr.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import iseobj from 'wsemi/src/iseobj.mjs'
 import isfun from 'wsemi/src/isfun.mjs'
@@ -137,6 +138,11 @@ let syncBy1To1 = async (opt = {}) => {
         //check
         if (fsIsFile(fpHash)) {
             hashsOld = readJson(fpHash)
+
+            //check, 快取內容須為陣列, 與解析失敗同處置(拋錯由下方catch記錄並中止本輪), 非陣列不視同無快取, 否則來源會全量重送, 或靜默不同步且快取被覆寫
+            if (!isarr(hashsOld)) {
+                throw new Error(`invalid hash cache content: must be an array`)
+            }
         }
 
         //vfps

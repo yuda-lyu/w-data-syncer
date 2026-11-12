@@ -37,3 +37,11 @@
 - **「寫入被略過」之變異不一定由資料斷言擊殺**:`syncByOrm` 無狀態(每輪由 `tar.select()` 重算差異),略過 `tar.insert`/`tar.save` 使目標永不收斂,每輪皆 `b` 為 true,舊測試與新測試皆因「等不到無異動之輪」逾時而敗(在 `before` 內,資料斷言根本沒跑到).真正只有資料斷言能擊殺者是 `tar.del` 略過(目標比來源多一列,落入跳過規則而安靜)——事件測試綠、目標資料測試紅;`tar.del` 刪錯列、移除跳過規則亦只有新測試擊殺.判讀變異結果時要看是被哪個斷言殺的,不只看「有被殺」.
 - **變異副本之執行**:`./tmp/syncer/mut/<id>/{src,test_new,test_old}`(`test_old` 取 `git archive HEAD`),`./tmp` 在套件內故 `lodash-es`、`wsemi` 等由套件根 `node_modules` 解析;測試以套件根為 cwd 跑(`./_test_*`、`./test/_tmp/…` 落套件根).被殺之變異會因 `ev.clear()` 未執行而讓 mocha 不結束,須加 `--exit`;副本之 `syncerTraceKit.mjs` 將防懸置上限由 90 秒縮為 30 秒(只改副本)以縮短被殺變異之耗時;單趟 14 變異約 8 分鐘,須在一個 `--lock` 內合併跑.
 - **背景指令與 `quiet-run` 之輸出**:`quiet-run` 結束前不輸出,背景執行時其輸出檔為空;以 `tmp/syncer/mut/*/result_*.json` 是否出現追蹤進度.中斷 `quiet-run` 後其持有之測試鎖須以 `quiet-run --release-stale --cwd <套件根>` 回收(只回收本套件且持有者已結束者),並清掉被中斷之測試遺留於套件根之 `_test_*` 資料夾.
+
+## 非陣列舊側資料中止本輪(R-SYNC-NONARRAY-01,2026-11-12)
+
+- **先看被呼叫函數之上游有沒有已把輸入正規化**:盤點稿稱 `syncByOrm` 之 `tar.select()` 回非陣列時,wsemi `ltdtDiffByKey` 新版會「靜默不同步」;實測並非如此——`syncByOrm.mjs` 在呼叫前以 `sortBy(ltdtTar, key)` 先轉成陣列(`undefined`/`null`/數字→`[]`、字串→字元陣列、物件→值陣列),修前即「來源全數新增」,wsemi 之改變在此站點碰不到.真正會「靜默不同步」的是 `by-1to1`/`by-nto1` 之 hash 快取:`hashsOld` 為 `null` 等直接進 `ltdtDiffByKey`,新版回空結果,`funProc` 不呼叫,卻照常 `writeJson` 把快取覆寫成最新 hash——該輪之新增檔案永遠不會再被送出(修前紅測試實測 `b: false`、`add: []`、`bErr: false`).判讀「某函數行為改變會影響哪些站點」時,以修前紅測試實跑為準,不只讀呼叫端.
+- **檢查用 `isarr`(空陣列合法)不用 `isearr`**:空陣列表示尚無資料(目標端空表、快取為 `[]`),照常全量新增;`isearr` 會把它當錯誤(變異 M02/M08/M12 即此,由「空陣列全量新增」案擊殺).
+- **訊息以固定文字、測試斷言「等於常數」**:比斷言「不含輸入值」更強,也不必為每種輸入值各造一個獨特標記;變異 M04/M09/M13(訊息帶輸入值)由此擊殺.
+- **快取檔非陣列與 JSON 解析失敗走同一條 `catch`**:`readJson` 後檢查即可,不必動 `readJson`;兩者皆不呼叫 `funPreEnd`(解析失敗原本即如此),測試以「JSON 無法解析」對照案鎖住兩者形狀一致.
+- **變異腳本**:`./tmp/ds-syncer/mutate.mjs`(暫存、用畢即清)對每項變異複製 `src`、`test` 到 `./tmp/ds-syncer/mut/<id>/`,在副本上做「恰好出現一次」之字串取代(取代不到即判無效,避免假存活),以 `node <套件根>/node_modules/mocha/bin/mocha.js --no-parallel --exit` 在副本目錄為 cwd 跑新測試檔(測試之相對路徑 `./test/_tmp/…` 落在副本內,不污染套件根);`lodash-es`、`wsemi` 由上層 `node_modules` 解析,不複製.整趟包在一個 `quiet-run --lock` 內(13 項約 100 秒,其中「拔除檢查」類因 `WDataSyncer` 整合案等不到 `fail` 事件而各耗 30 秒 mocha 逾時).

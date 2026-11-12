@@ -47,6 +47,22 @@
 - 測試:`test/syncer_1to1.test.mjs`(`should leave target folder as …`).變異(`src` 副本,2026-10-31):S2 不執行 `funRemove`、S2b 不執行 modify 之 `funProc`、S2c 不執行 add 之 `funProc`——動工前版 `syncer_1to1` 三者皆存活,新版皆擊殺.
 - 測試:`test/syncer_orm.test.mjs`(`should leave target data as …`;每階段於來源偵測到且同步至目標之事件後、下一筆寫入來源前,以 `omTar.select()` 取快照,每列 `id=value` 依 `id` 排序).階段:逐筆新增、第 4 筆時修改第 3 筆、replace(同一來源檔刪一列加一列,來源筆數不變,故目標 `del`+`insert`)、無異動兩輪、來源筆數少於目標(依 `syncByOrm` 規則跳過,目標不隨來源刪除).變異(`src` 副本,2026-10-31,變異副本與工具為暫存、用畢即清,結果見該輪報告):不執行 `tar.insert`/`tar.save`/`tar.del`、`tar.del` 刪成 `r.same`、移除「來源筆數少於目標時跳過」——新測試皆擊殺;動工前版對 `tar.del` 略過、刪錯列、移除跳過規則三項存活;略過 `tar.insert`/`tar.save` 者新舊測試皆因目標不收斂(等不到無異動之輪)逾時而敗,非資料斷言之功.
 
+## R-SYNC-NONARRAY-01 比對前之「舊側」資料須為陣列,非陣列中止本輪,不視同空陣列
+
+- 來源:wsemi `ltdtDiffByKey` 對非陣列亦非物件之輸入改回空結果(wsemi 下一版,2026-11-12);原則:自有套件不留相容路徑、品質優先,不把非陣列視同 `[]`.
+- 規則:凡以 `ltdtDiffByKey` 比對之「舊側」資料,來自外部(目標端 `select()` 回傳值、磁碟快取檔)者,於比對前須確認為陣列(`isarr`,空陣列合法=尚無資料);非陣列時**記錄錯誤事件並中止本輪**,訊息為固定文字、不帶輸入值,不改寫任何持久狀態(目標端、快取檔).不得放行(放行後 `sortBy` 或舊版 `ltdtDiffByKey` 會將其當成空陣列,來源全數被當成新增;新版 `ltdtDiffByKey` 則回空結果而靜默不同步,同時快取被覆寫).
+- 站點全集與判準(盤點指令:`git grep -n "ltdtDiffByKey(" -- src`):
+
+| 站點 | 舊側資料來源 | 判準 |
+|---|---|---|
+| `src/syncByOrm.mjs:85`(檢查在 `:65`) | `tar.select()` 回傳值 | 已套:`!isarr` → `srLogError({ event: 'syncByOrm-selectTar' })` 並 `throw`(固定訊息 `invalid tar.select result: must be an array`,依 dspec〈輸入參數之檢測機制〉§6 之 `invalid <名稱>: must be <種類描述>`);位於「來源無資料略過回傳 null」之後、「來源筆數少於目標」之前,故來源無資料時不讀目標、兩種情形分開.注意 `:80` 之 `sortBy(ltdtTar, key)` 會先把非陣列轉成陣列,所以此站點修前即為「全數新增」而非靜默不同步 |
+| `src/syncBy1To1.mjs:173`(檢查在 `:143`) | `hash.json` 快取檔解析結果(`hashsOld`) | 已套:`readJson` 後 `!isarr` → `throw`(固定訊息 `invalid hash cache content: must be an array`),由既有 `catch` 記錄 `event: 'proc'` 並中止(`bErr: true`,與 JSON 解析失敗同處置,不呼叫 `funProc`/`funRemove`/`funPreEnd`),快取檔維持原樣 |
+| `src/syncByNTo1.mjs:126`(檢查在 `:101`) | 同上 | 已套(同上,不呼叫 `funProc`) |
+| `src/WDataSourceFromCsv.mjs:191` | 記憶體 `memory` 內之 `ltdtOld`,新側 `ltdtNew` | 刻意不套(不可達):兩者皆為 `readCsv` 之回傳值(`:122`、`:158`),`readCsv` 回傳 `wdc.parseCsv` 之結果或其 `map` 結果(`:84`、`:91`),`parseCsv` 只 resolve 陣列(`w-data-csv` `WDataCsv.mjs` `getRows` 之 `res`)或 reject;`memory.ltdt` 只由該回傳值寫入(`:129`、`:173`、`:185`),`readSave` 取 `ltdtOld` 前已檢查 `memory.has(fn)`(`:153`).若 `w-data-csv` 的 `parseCsv` 回傳契約改變,須重審本站點 |
+
+- 測試:`test/sync-nonarray.test.mjs`(26 案):`by-orm` 之 `tar.select()` 回 `undefined`/`null`/`{}`/物件/字串/數字各一(拋錯且訊息等於固定文字、`srLog.error` 恰一筆、目標 `insert`/`save`/`del` 零呼叫)、回 `[]` 全數新增、來源無資料(`undefined`/`null`/`[]`)略過回 `null` 且不讀目標;`by-1to1`、`by-nto1` 各:快取為 `null`/`123`/`"x"`/`{}`/物件/`true`(`bErr: true`、`srLog.error` 恰一筆、`funProc`/`funRemove`/`funPreEnd` 零呼叫、目標夾無檔案、快取檔原文不變)、JSON 無法解析之對照案(形狀相同)、快取為 `[]` 全量新增且快取更新;經 `WDataSyncer` 兩案(`by-orm` 的 `tar.select` 回 `null` → `fail`/`error` 事件帶固定訊息、目標零寫入、回復為陣列後同步成功;`by-1to1` 快取 `null` → `done` 之 `bErr` 為 true).指令:`npm test`.
+- 變異(`src` 副本於 `./tmp/`,2026-11-12,13 項皆擊殺):三站點各「拔除檢查」(改回舊寫法)、「改視同空陣列」、「檢查過嚴(`isearr`,空陣列也拒)」、「訊息帶輸入值」,`syncByOrm` 另「不記錄錯誤」「改回傳 null」.
+
 ## R-BUF-HIST-01 `by-buffer` 之下載歷史名稱每輪唯一,且字典序等於輪序
 
 - 規則:`syncByBuffer` 每輪之歷史資料夾(`fdFromStorageTempHists/<名>`)與完成狀態檔(`fdFromStorageTempHistStates/<名>`)共用一個名稱,名稱須①每輪唯一(不因同一秒或同一毫秒內多輪而撞名、共用資料夾);②依字典序排序恆等於產生順序(`numKeep` 淘汰最舊者、同名檔取最新版皆依 `sortBy(name)`);③不沿用任何現存之歷史資料夾名或完成狀態檔名.實作:`src/syncByBuffer.mjs` 之 `genHistName`——20 碼數字,17 碼毫秒時間戳(wsemi `nowms2strp`)+3 碼序號;序號取「同一毫秒內已用最大序號(取自歷史資料夾與完成狀態檔兩處之名稱)加 1」,不回收已刪除者;同一毫秒內用盡 1000 個序號時該輪拋錯 `too many rounds within the same millisecond`,不沿用名稱.對外行為變化記於 README〈Breaking changes〉.
