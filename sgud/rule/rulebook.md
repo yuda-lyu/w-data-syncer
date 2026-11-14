@@ -58,10 +58,37 @@
 | `src/syncByOrm.mjs:85`(檢查在 `:65`) | `tar.select()` 回傳值 | 已套:`!isarr` → `srLogError({ event: 'syncByOrm-selectTar' })` 並 `throw`(固定訊息 `invalid tar.select result: must be an array`,依 dspec〈輸入參數之檢測機制〉§6 之 `invalid <名稱>: must be <種類描述>`);位於「來源無資料略過回傳 null」之後、「來源筆數少於目標」之前,故來源無資料時不讀目標、兩種情形分開.注意 `:80` 之 `sortBy(ltdtTar, key)` 會先把非陣列轉成陣列,所以此站點修前即為「全數新增」而非靜默不同步 |
 | `src/syncBy1To1.mjs:173`(檢查在 `:143`) | `hash.json` 快取檔解析結果(`hashsOld`) | 已套:`readJson` 後 `!isarr` → `throw`(固定訊息 `invalid hash cache content: must be an array`),由既有 `catch` 記錄 `event: 'proc'` 並中止(`bErr: true`,與 JSON 解析失敗同處置,不呼叫 `funProc`/`funRemove`/`funPreEnd`),快取檔維持原樣 |
 | `src/syncByNTo1.mjs:126`(檢查在 `:101`) | 同上 | 已套(同上,不呼叫 `funProc`) |
-| `src/WDataSourceFromCsv.mjs:191` | 記憶體 `memory` 內之 `ltdtOld`,新側 `ltdtNew` | 刻意不套(不可達):兩者皆為 `readCsv` 之回傳值(`:122`、`:158`),`readCsv` 回傳 `wdc.parseCsv` 之結果或其 `map` 結果(`:84`、`:91`),`parseCsv` 只 resolve 陣列(`w-data-csv` `WDataCsv.mjs` `getRows` 之 `res`)或 reject;`memory.ltdt` 只由該回傳值寫入(`:129`、`:173`、`:185`),`readSave` 取 `ltdtOld` 前已檢查 `memory.has(fn)`(`:153`).若 `w-data-csv` 的 `parseCsv` 回傳契約改變,須重審本站點 |
+| `src/WDataSourceFromCsv.mjs`(`readSave` 內之 `ltdtDiffByKey(ltdtOld, ltdtNew, key)`) | 記憶體 `memory` 內之 `ltdtOld`,新側 `ltdtNew` | 刻意不套(不可達):兩者皆為 `readCsv` 之回傳值,`readCsv` 回傳 `wdc.parseCsv` 之結果經 `filter`/`map` 後之陣列,`parseCsv` 只 resolve 陣列(`w-data-csv` `WDataCsv.mjs` `getRows` 之 `res`)或 reject;`memory.ltdt` 只由該回傳值寫入,`readSave` 取 `ltdtOld` 前已檢查 `memory.has(fn)`.若 `w-data-csv` 的 `parseCsv` 回傳契約改變,須重審本站點 |
 
 - 測試:`test/sync-nonarray.test.mjs`(26 案):`by-orm` 之 `tar.select()` 回 `undefined`/`null`/`{}`/物件/字串/數字各一(拋錯且訊息等於固定文字、`srLog.error` 恰一筆、目標 `insert`/`save`/`del` 零呼叫)、回 `[]` 全數新增、來源無資料(`undefined`/`null`/`[]`)略過回 `null` 且不讀目標;`by-1to1`、`by-nto1` 各:快取為 `null`/`123`/`"x"`/`{}`/物件/`true`(`bErr: true`、`srLog.error` 恰一筆、`funProc`/`funRemove`/`funPreEnd` 零呼叫、目標夾無檔案、快取檔原文不變)、JSON 無法解析之對照案(形狀相同)、快取為 `[]` 全量新增且快取更新;經 `WDataSyncer` 兩案(`by-orm` 的 `tar.select` 回 `null` → `fail`/`error` 事件帶固定訊息、目標零寫入、回復為陣列後同步成功;`by-1to1` 快取 `null` → `done` 之 `bErr` 為 true).指令:`npm test`.
 - 變異(`src` 副本於 `./tmp/`,2026-11-12,13 項皆擊殺):三站點各「拔除檢查」(改回舊寫法)、「改視同空陣列」、「檢查過嚴(`isearr`,空陣列也拒)」、「訊息帶輸入值」,`syncByOrm` 另「不記錄錯誤」「改回傳 null」.
+
+## R-CSV-BLANKROW-01 CSV 解析後剔除空列
+
+- 來源:wsemi 1.9.60 起 `ltdtDiffByKey` 遇壞列(非物件、缺主鍵)、主鍵值無效(`undefined`、`null`、`''`)、同側主鍵重複、主鍵型別混用一律拋錯(原靜默略過);裁定(主控 2026-11-14,第 430 項第二批)「若 CSV 空列被擋,於 w-data-syncer 解析時先剔除,不在本函數放寬」.
+- 規則:`WDataSourceFromCsv` 之 `readCsv`(`readInsert`、`readSave` 共用)於 `wdc.parseCsv` 後、補欄位(`heads`)前,剔除「無欄位或全部欄位皆為空白字串(空字串或只有空白,以 `trim` 判)」之列;只要有任一欄位非空白即保留(不以剔除掩蓋「主鍵空而其他欄有值」之壞列,該列於比對階段拋錯屬正常).`w-data-csv` `parseCsv` 實測(2026-11-14):空行→`{}`、只有逗號之行→`{ time: '', value: '' }`、只有空白之行→`{ time: '   ' }`(缺欄)、只有空白與逗號之行→`{ time: '  ', value: ' ' }`;結尾單一換行不產生空列,多個換行產生多個 `{}`.
+- 站點全集(盤點指令:`git grep -n "parseCsv\|isBlankRow" -- src`):`src/WDataSourceFromCsv.mjs` 之 `readCsv`(唯一讀檔站點;`isBlankRow`).
+- 測試:`test/sfcsv_rows.test.mjs` 之 `describe('blank rows are dropped')`(4 案:含空行/只有逗號/只有空白之 CSV 與無空列者偵測結果相同且無錯誤並驗轉換函數不見空列、部分欄位非空之列保留、只有主鍵空而他欄有值之列不剔除且該檔由 R-SYNC-COMMIT-01 之驗證拒收、全為空列之檔視為無資料).指令:`npm test`.變異(`src` 副本於 `./tmp/`,2026-11-14,皆擊殺):移除剔除、任一空欄即剔除、空白不 trim.
+
+## R-SYNC-COMMIT-01 記憶體只存可比對之資料;比對(與轉換)全部成功後才提交狀態,比對失敗時狀態維持舊值,修正後之變更不遺失
+
+- 來源:wsemi 1.9.60 起 `ltdtDiffByKey` 對壞資料拋錯;原 `WDataSourceFromCsv.readSave` 於比對前先 `memory.set` 新資料,比對拋錯時錯誤僅被 `.catch` 以 `console.log` 呈現而記憶體已是新資料 ⇒ 該次變更永遠不會送出(且下一次比對之舊側即為壞資料,再拋錯,再遺失一次).主控裁定(2026-11-14,syncer430b):不採「舊側壞時以新資料重建基準」(壞資料已先以 `insert` 送到下游而污染下游),改為從源頭維持「記憶體只存可比對之資料」.
+- 規則(不變量):凡「以前次狀態為基準比對本次輸入,並於比對後提交本次輸入為新基準」者,①**進入基準之資料先驗證**:不經比對即進入基準之路徑(首次載入、舊側無資料之存檔)須先以與 `ltdtDiffByKey` 相同之規則驗證新資料,不符則不寫入基準、不 `emit`(壞資料不進記憶體、不送到下游),錯誤照現行管道;其後基準必為可比對,故比對拋錯時錯誤必在新側;②**先比對、(含送出前之轉換)全部成功後才提交新基準**,任一步拋錯時基準維持舊值(提交與送出事件之間不得再有可拋錯之步驟);③比對失敗不得靜默(記錄錯誤,現為 `console.log`,對外呈現方式另輪由主控立項改為 `error` 事件);④基準無該檔(首次載入失敗)為正常狀態:其後之存檔視同首次載入(驗證通過即 `insert` 送出全部),刪除該檔不報錯(無資料可送 `del`).
+- 實作:首次載入共用 `load(fn, ltdtNew)`(驗證 `ltdtDiffByKey([], ltdtNew, key)`→轉換→`memory.set`→`emit insert`),`readInsert` 與 `readSave` 之舊側無資料(含記憶體無此檔)皆呼叫之.驗證之寫法擇簡:直接以空陣列為舊側呼叫 `ltdtDiffByKey` 取其檢測(結果不用),不另抽驗證函數、不自寫與其重複之判準(判準隨 wsemi 一致);只有 `load` 一處呼叫,故不包成具名輔助.
+- 站點全集與判準(盤點指令:`git grep -n "ltdtDiffByKey(" -- src`):
+
+| 站點 | 持有之跨輪狀態 | 判準 |
+|---|---|---|
+| `src/WDataSourceFromCsv.mjs` `readSave`(有舊資料) | 記憶體 `memory`(各檔之 `ltdt`、`ltdtFmt`) | 已套:比對 → 轉換整體與 add/diff/del → `memory.set` → `emit`;比對或轉換拋錯時記憶體維持舊值並拋錯(舊值必可比對,見不變量) |
+| `src/WDataSourceFromCsv.mjs` `readSave`(舊側無資料或記憶體無此檔) | 同上 | 已套:呼叫 `load`,先驗證新資料,不符則不寫入、不 `emit`、拋錯 |
+| `src/WDataSourceFromCsv.mjs` `readInsert` | 同上 | 已套:呼叫 `load`(同上);`readCsv`、驗證、轉換皆在 `memory.set` 之前,拋錯時記憶體不變(無此檔) |
+| `src/WDataSourceFromCsv.mjs` `remove` | 同上 | 已套:記憶體無此檔(未進記憶體,下游從未收到其資料)則直接返回,不報錯、不送 `del` |
+| `src/syncByOrm.mjs` | 無(基準為目標端之 `tar.select()`,每輪重取) | 不適用且無遺失風險:`ltdtDiffByKey` 於 `tar.insert/save/del` 之前,拋錯時目標零寫入;下一輪重新取兩端比對.實測:`test/sync-diff-throw.test.mjs` by-orm 2 案 |
+| `src/syncBy1To1.mjs` | `hash.json` 快取檔 | 已守(原本即正確):`writeJson(fpHash, hashsNew)` 位於全部處理成功之分支末(`bError` 為真則不寫);比對拋錯進 `catch`,快取維持舊值,不呼叫 `funProc`/`funRemove`.實測:`test/sync-diff-throw.test.mjs` by-1to1 1 案 |
+| `src/syncByNTo1.mjs` | 同上 | 已守(同上).實測:同檔 by-nto1 1 案 |
+
+- 測試:`test/sfcsv_rows.test.mjs`——`describe('memory is updated only after the comparison succeeds')`(3 案:重複主鍵、主鍵空各一——壞檔後舊資料不變、修正後新增與修改皆送出;轉換拋錯後舊資料不變、下次變更補送);`describe('only comparable data enters the memory')`(5 案:首次載入含重複主鍵、含空主鍵各一——不 `insert`、記憶體維持空、修正後以 `insert` 送出全部、其後一般比對;空檔首次載入後寫入重複主鍵(舊側無資料分支)——不 `insert`、修正後送出;首次載入轉換拋錯後下次變更視同首次載入;未進記憶體之檔被刪除不報錯);`test/sync-diff-throw.test.mjs`(三站點之回歸防線,修前修後皆綠).同步點為被測物自身之 `change` 事件與作業失敗時之 `console.log('readSave catch')`/`('readInsert catch')` 攔截(`console.log` 為現行之錯誤呈現方式,攔截僅供測試同步;`until(nChange, nErr)` 於錯誤數或事件數超過預期時立即拒絕,故修前紅不必等防懸置上限).指令:`npm test`.
+- 變異(`src` 副本於 `./tmp/`,2026-11-14,皆擊殺).第一輪(syncer430,12 項):CSV 之「比對前先 set」「轉換前先 set」「無重建」「一律重建」「舊側壞即重建(不看新側)」「重建不 emit」及空列 3 項;`syncBy1To1`/`syncByNTo1` 之「比對前先寫快取」;`syncByOrm` 之「吞掉比對拋錯回 null」.第二輪(syncer430b,12 項;重建基準之 4 項隨設計移除):`load` 之「無驗證」「先 set 再驗證」「空資料也拒收」,`readInsert` 單點略過驗證、`readSave` 舊側無資料單點略過驗證,「記憶體無此檔時 readSave 仍拋 does not exist」,「remove 不檢查記憶體有無此檔」,及「比對前先 set」「轉換前先 set」與空列 3 項重跑.
 
 ## R-BUF-HIST-01 `by-buffer` 之下載歷史名稱每輪唯一,且字典序等於輪序
 

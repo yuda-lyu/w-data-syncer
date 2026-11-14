@@ -18,7 +18,7 @@ import ltdtDiffByKey from 'wsemi/src/ltdtDiffByKey.mjs'
  * @param {Object} opt - 設定物件
  * @param {String} [opt.key='time'] - 用於排序與比對的 key
  * @param {Object} [opt.srLog=null] - log 器，需提供 info、error 函數
- * @returns {Promise} 回傳分類結果物件 { b, insert, save, del, same }，b 代表是否有異動，來源無資料或筆數少於目標時跳過並回傳 null；tar.select 回傳非陣列時拋錯(Error 訊息為固定文字，不帶回傳值)，與來源無資料之略過分開
+ * @returns {Promise} 回傳分類結果物件 { b, insert, save, del, same }，b 代表是否有異動，來源無資料或筆數少於目標時跳過並回傳 null；tar.select 回傳非陣列時拋錯(Error 訊息為固定文字，不帶回傳值)，與來源無資料之略過分開；來源或目標之資料列不符 wsemi ltdtDiffByKey(1.9.60 起)之檢測(非物件、缺 key 欄位、key 值為 undefined/null/空字串、同側 key 重複、key 值型別混用)時於比對處拋錯，此時 insert、save、del 皆尚未呼叫(目標端不寫入，本函數不持有跨輪狀態)，修正資料後之下一輪重新與目標比對
  */
 async function syncByOrm(src, tar, opt = {}) {
 

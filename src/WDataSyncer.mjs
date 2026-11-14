@@ -20,10 +20,10 @@ import syncByNTo1 from './syncByNTo1.mjs'
  * @param {Object} opt - 設定物件，除下列參數外，其餘設定會傳遞給對應模式的同步函數
  * @param {Object} [opt.src] - mode='by-orm' 時之資料來源，需提供 select 函數 (async)
  * @param {Object} [opt.tar] - mode='by-orm' 時之資料目標，需提供 select、insert、save、del 函數 (async)，其中 select 須回傳陣列(目標尚無資料時為空陣列)，回傳非陣列(undefined、null、物件、字串、數字等)不視同空陣列，該輪記錄錯誤事件並拋錯中止(發送 error 事件，目標端不寫入)，與來源無資料之略過分開
- * @param {String} [opt.key='time'] - mode='by-orm' 時用於排序與比對的 key
+ * @param {String} [opt.key='time'] - mode='by-orm' 時用於排序與比對的 key，來源與目標各自之 key 值須為非空字串或有限數字且不得重複，不符(wsemi ltdtDiffByKey 1.9.60 起)時該輪於比對處拋錯(發送 error 事件，目標端不寫入)，修正資料後下一輪重新與目標比對
  * @param {Function} [opt.funGetFiles] - mode='by-buffer' 時取得來源檔案的函數 (async)，呼叫時傳入 (fdDw, opt)，fdDw 為本輪專屬之下載歷史資料夾路徑，其名稱為20碼數字(17碼毫秒時間戳+3碼序號，同一毫秒內序號遞增)，各輪互異不共用，依名稱排序即為各輪順序；同一毫秒內超過1000輪時該輪拋錯。本輪 funGetFiles 拋錯時其 fdDw 為下載未完成之資料夾(無完成狀態檔)，於其後之輪起依名稱與完成狀態檔逐一比對清除，其檔案不會進入儲存區；歷史保留數量 numKeep 只計下載完成之輪(資料夾與完成狀態檔同名皆在)
  * @param {String} [opt.fdFromStorageTempHash='./_fromStorageTempHash'] - mode='by-1to1' 或 'by-nto1' 時來源端檔案hash暫存區資料夾，其內 hash.json 為上一輪成功後記錄之各檔案hash快取，內容須為陣列；快取檔無法解析或解析後非陣列(null、數字、字串、物件等)時，不視同無快取，該輪記錄錯誤事件(event 為 proc)並中止(回傳 bErr 為 true，不呼叫 funProc 與 funRemove，快取檔維持原樣)，須由使用端修正或刪除該快取檔
- * @param {Function} [opt.funGetVfpsSrc] - mode='by-1to1' 或 'by-nto1' 時取得來源檔案清單的函數 (async)
+ * @param {Function} [opt.funGetVfpsSrc] - mode='by-1to1' 或 'by-nto1' 時取得來源檔案清單的函數 (async)，各項以 name 為主鍵與快取比對，name 須為非空字串且清單內不得重複；不符(wsemi ltdtDiffByKey 1.9.60 起)時該輪記錄錯誤事件(event 為 proc)並中止(回傳 bErr 為 true，不呼叫 funProc 與 funRemove，快取檔維持原樣)，清單修正後之下一輪對舊快取比對，不遺失
  * @param {Function} [opt.funProc] - mode='by-1to1' 或 'by-nto1' 時處理檔案的函數 (async)
  * @param {Function} [opt.funRemove] - mode='by-1to1' 時移除檔案的函數 (async)
  * @param {Number} [opt.timeInterval=20000] - 同步觸發間隔時間（毫秒），預設每 20 秒執行一次（1 分鐘 3 次）
