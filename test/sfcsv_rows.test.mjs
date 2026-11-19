@@ -188,7 +188,7 @@ describe('sfcsv_rows', function() {
             try {
                 await s.pb.until(0, 1, 'refused')
                 assert.strict.deepStrictEqual(s.pb.errs.length, 1)
-                assert.strict.deepStrictEqual(/^invalid ltdtNew\[0\]: primary key must be a non-empty string/.test(s.pb.errs[0].message), true)
+                assert.strict.deepStrictEqual(/^invalid ltdtNew\[0\]: must have a primary key of a non-empty string or a finite number/.test(s.pb.errs[0].message), true)
                 assert.strict.deepStrictEqual(await s.om.select(), [])
             }
             finally {

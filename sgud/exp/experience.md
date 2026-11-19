@@ -63,3 +63,8 @@
 - **測試同步與錯誤預期之收緊**:失敗案沒有被測物事件可等,仍以 `console.log` 攔截為同步點;`until(nChange, nErr)` 除「錯誤數超過預期」外,新增「change 事件數超過預期」即拒絕,修前紅(壞資料被 `insert` 送出)因此在事件發生當下即失敗,不必等 90 秒防懸置上限.原「保留非全空列」案之內容含空主鍵列,於新驗證下整檔被拒收,改為主鍵非空(`t0,`、`  ,5`)之保留案,另增「只有主鍵空而他欄有值之列不剔除,整檔由驗證拒收」案(不以剔除掩蓋).
 - **「舊側無資料」分支之測試**:以空檔(`''`)首次載入(合法,`insert` 空陣列、記憶體有此檔而 `ltdt` 為空),其後寫入重複主鍵之內容,走 `readSave` 之 `size(ltdtOld) === 0` 分支;與「記憶體無此檔」(首次載入被拒)是兩條不同路徑,皆經 `load`,以單點變異(`readInsert` 略過驗證、`readSave` 舊側無資料略過驗證)分別證明各有測試擊殺.
 - **變異腳本**:沿用第一輪作法(`./tmp/syncer430b/mutate.mjs`,用畢即清);跨行取代前先轉 LF;分兩批各包一個 `--lock`(批 A 7 項約 3.5 分鐘、批 B 5 項約 7 分鐘,其中「任一空欄即剔除」被殺前會等到 119 秒才失敗).
+
+## wsemi 1.9.70 `ltdtDiffByKey` 訊息格式改為 `invalid <名稱>: must …`(2026-11-19,dsy492j)
+
+- **只有「比對訊息全文後綴」之斷言會紅**:1.9.69 之主鍵為空訊息為 `invalid ltdtNew[0]: primary key must be a non-empty string or a finite number`,1.9.70 改為 `invalid ltdtNew[0]: must have a primary key of a non-empty string or a finite number`(名稱 `ltdtNew[i]`/`ltdtOld[i]` 與前綴 `invalid ` 不變,不帶輸入值).本庫斷言多為只比對前綴 `^invalid ltdtNew\[`/`^invalid ltdtOld\[`(`sfcsv_rows`、`sync-diff-throw`),升版後仍綠;唯一帶後綴者為 `test/sfcsv_rows.test.mjs` 之「只有主鍵空之列」案,升版後紅(86 passing、1 failing),改為依實測訊息之新字面.其餘訊息(缺主鍵欄位、同側主鍵重複)之字面亦已改版,本庫無斷言其後綴.
+- **實測方式**:升版後以暫存腳本呼叫 `wsemi/src/ltdtDiffByKey.mjs` 取各情境之實際 `err.message`,不憑 wsemi 之規格文字推測;`dist/` 與 `docs/dist/` 內之舊字面為打包之 wsemi 舊碼,於發布時重新產製,不手改.
