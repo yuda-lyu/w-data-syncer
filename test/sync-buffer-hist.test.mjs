@@ -59,7 +59,7 @@ describe('sync-buffer-hist', function() {
 
     //listNames, 依名稱排序列出某夾下之資料夾名或檔名
     let listNames = (fd, isFolder) => {
-        let vfps = filter(fsTreeFolder(fd, 1), { isFolder })
+        let vfps = filter(fsTreeFolder(fd, { levelLimit: 1 }), { isFolder })
         return sortBy(map(vfps, 'name'))
     }
 
@@ -70,7 +70,7 @@ describe('sync-buffer-hist', function() {
 
     //snapshot, 儲存區實際檔案內容
     let snapshot = (fd) => {
-        let vfps = filter(fsTreeFolder(fd, 1), { isFolder: false })
+        let vfps = filter(fsTreeFolder(fd, { levelLimit: 1 }), { isFolder: false })
         vfps = sortBy(vfps, 'name')
         return map(vfps, (v) => `${v.name}=${fs.readFileSync(v.path, 'utf8')}`).join(', ')
     }

@@ -29,7 +29,7 @@ describe('syncer_buffer', function() {
     }
 
     let snapshot = (fd) => {
-        let vfps = filter(fsTreeFolder(fd, 1), { isFolder: false })
+        let vfps = filter(fsTreeFolder(fd, { levelLimit: 1 }), { isFolder: false })
         vfps = sortBy(vfps, 'name')
         return map(vfps, (v) => `${v.name}=${fs.readFileSync(v.path, 'utf8')}`).join(', ')
     }
@@ -43,7 +43,7 @@ describe('syncer_buffer', function() {
         //funGetFiles, 清空下載資料夾後複製來源檔案
         let funGetFiles = async (fdDw) => {
             fsCleanFolder(fdDw)
-            let vfps = filter(fsTreeFolder(fdSrc, 1), { isFolder: false })
+            let vfps = filter(fsTreeFolder(fdSrc, { levelLimit: 1 }), { isFolder: false })
             vfps.forEach((v) => {
                 fsCopyFile(v.path, `${fdDw}/${v.name}`)
             })

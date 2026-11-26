@@ -168,7 +168,7 @@ describe('sync-nonarray', function() {
         if (!fs.existsSync(fd)) {
             return ''
         }
-        let vfps = filter(fsTreeFolder(fd, 1), { isFolder: false })
+        let vfps = filter(fsTreeFolder(fd, { levelLimit: 1 }), { isFolder: false })
         return map(vfps, (v) => `${v.name}=${fs.readFileSync(v.path, 'utf8')}`).join(', ')
     }
 
@@ -188,7 +188,7 @@ describe('sync-nonarray', function() {
                 fdFromStorageTempHash: fdHash,
                 fdSelfStorage: fdTar,
                 funGetVfpsSrc: async () => {
-                    return filter(fsTreeFolder(fdSrc, 1), { isFolder: false })
+                    return filter(fsTreeFolder(fdSrc, { levelLimit: 1 }), { isFolder: false })
                 },
                 funProc: async ({ fpSrc, fpTar }) => {
                     calls.funProc++
@@ -275,7 +275,7 @@ describe('sync-nonarray', function() {
             let opt = {
                 fdFromStorageTempHash: fdHash,
                 funGetVfpsSrc: async () => {
-                    return filter(fsTreeFolder(fdSrc, 1), { isFolder: false })
+                    return filter(fsTreeFolder(fdSrc, { levelLimit: 1 }), { isFolder: false })
                 },
                 funProc: async () => {
                     calls.funProc++
@@ -396,7 +396,7 @@ describe('sync-nonarray', function() {
                 fdSrcStorage: fds.fdSrc,
                 fdFromStorageTempHash: fds.fdHash,
                 fdSelfStorage: fds.fdTar,
-                funGetVfpsSrc: async () => filter(fsTreeFolder(fds.fdSrc, 1), { isFolder: false }),
+                funGetVfpsSrc: async () => filter(fsTreeFolder(fds.fdSrc, { levelLimit: 1 }), { isFolder: false }),
                 funProc: async ({ fpSrc, fpTar }) => {
                     calls.funProc++
                     fs.copyFileSync(fpSrc, fpTar)

@@ -138,7 +138,7 @@ describe('sync-diff-throw', function() {
         if (!fs.existsSync(fd)) {
             return ''
         }
-        let vfps = sortBy(filter(fsTreeFolder(fd, 1), { isFolder: false }), 'name')
+        let vfps = sortBy(filter(fsTreeFolder(fd, { levelLimit: 1 }), { isFolder: false }), 'name')
         return map(vfps, (v) => `${v.name}=${fs.readFileSync(v.path, 'utf8')}`).join(', ')
     }
 
@@ -149,7 +149,7 @@ describe('sync-diff-throw', function() {
     //funGetVfpsSrc之回傳: 正常為來源夾之檔案; bad時多一筆與a.txt同名之項目(名稱重複, 模擬自訂之清單函數遞迴列出不同夾之同名檔)
     let mkGetVfps = (fdSrc, st) => {
         return async () => {
-            let vfps = sortBy(filter(fsTreeFolder(fdSrc, 1), { isFolder: false }), 'name')
+            let vfps = sortBy(filter(fsTreeFolder(fdSrc, { levelLimit: 1 }), { isFolder: false }), 'name')
             if (st.bad) {
                 vfps = [...vfps, vfps[0]]
             }

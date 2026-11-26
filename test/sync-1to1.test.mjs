@@ -25,7 +25,7 @@ describe('sync-1to1', function() {
     }
 
     let snapshot = (fd) => {
-        let vfps = filter(fsTreeFolder(fd, 1), { isFolder: false })
+        let vfps = filter(fsTreeFolder(fd, { levelLimit: 1 }), { isFolder: false })
         vfps = sortBy(vfps, 'name')
         return map(vfps, (v) => `${v.name}=${fs.readFileSync(v.path, 'utf8')}`).join(', ')
     }
@@ -52,7 +52,7 @@ describe('sync-1to1', function() {
             fdFromStorageTempHash: fdHash,
             fdSelfStorage: fdTar,
             funGetVfpsSrc: async () => {
-                return filter(fsTreeFolder(fdSrc, 1), { isFolder: false })
+                return filter(fsTreeFolder(fdSrc, { levelLimit: 1 }), { isFolder: false })
             },
             funProc: async ({ fn, fpSrc, fpTar }, type) => {
                 fsCopyFile(fpSrc, fpTar)

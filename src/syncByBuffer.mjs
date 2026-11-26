@@ -31,7 +31,7 @@ import ot from 'dayjs'
 function fsGetFiles(fd, levelLimit = 1) {
     let vfps = []
     try {
-        vfps = fsTreeFolder(fd, levelLimit)
+        vfps = fsTreeFolder(fd, { levelLimit })
     }
     catch (err) {
         // console.log(err)
@@ -76,7 +76,7 @@ function genHistName(fdHists, fdHistStates) {
     //seq, 同一毫秒內已用最大序號加1
     let seq = 0
     each([fdHists, fdHistStates], (fd) => {
-        each(fsTreeFolder(fd, 1), (v) => {
+        each(fsTreeFolder(fd, { levelLimit: 1 }), (v) => {
             let name = v.name
             if (name.length === lenHistMs + lenHistSeq && name.startsWith(msp)) {
                 seq = Math.max(seq, cint(name.slice(lenHistMs)) + 1)
@@ -240,13 +240,13 @@ let syncByBuffer = async (funGetFiles, opt = {}) => {
         srLogInfo({ event: `proc-numKeep-fromStorageTempHists`, msg: 'start...' })
 
         //vfds
-        vfds = fsTreeFolder(fdFromStorageTempHists, 1)
+        vfds = fsTreeFolder(fdFromStorageTempHists, { levelLimit: 1 })
         vfds = filter(vfds, { isFolder: true })
         vfds = sortBy(vfds, 'name') //明確依時間戳資料夾名升序, 確保takeRight取到最新numKeep筆與同名檔取最新版, 不依賴readdir平台順序
         // console.log('vfds', vfds, size(vfds))
 
         //vfpsState
-        vfpsState = fsTreeFolder(fdFromStorageTempHistStates, 1)
+        vfpsState = fsTreeFolder(fdFromStorageTempHistStates, { levelLimit: 1 })
         vfpsState = filter(vfpsState, { isFolder: false })
         vfpsState = sortBy(vfpsState, 'name') //與vfds同基準升序, 保持兩者對應一致
         // console.log('vfpsState', vfpsState, size(vfpsState))
@@ -329,7 +329,7 @@ let syncByBuffer = async (funGetFiles, opt = {}) => {
             }
 
             //vfpsHash
-            let vfpsHash = fsTreeFolder(vfd.path, 1)
+            let vfpsHash = fsTreeFolder(vfd.path, { levelLimit: 1 })
             vfpsHash = filter(vfpsHash, { isFolder: false })
             // console.log('vfpsHash', vfpsHash)
 

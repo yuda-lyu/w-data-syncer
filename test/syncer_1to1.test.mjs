@@ -27,7 +27,7 @@ describe('syncer_1to1', function() {
 
     //snapshot, 目標夾之實際檔案內容(依檔名排序), 供驗證同步之落地結果而非僅事件
     let snapshot = (fd) => {
-        let vfps = filter(fsTreeFolder(fd, 1), { isFolder: false })
+        let vfps = filter(fsTreeFolder(fd, { levelLimit: 1 }), { isFolder: false })
         vfps = sortBy(vfps, 'name')
         return map(vfps, (v) => `${v.name}=${fs.readFileSync(v.path, 'utf8')}`).join(', ')
     }
@@ -53,7 +53,7 @@ describe('syncer_1to1', function() {
             fdFromStorageTempHash: fdHash,
             fdSelfStorage: fdTar,
             funGetVfpsSrc: async () => {
-                return filter(fsTreeFolder(fdSrc, 1), { isFolder: false })
+                return filter(fsTreeFolder(fdSrc, { levelLimit: 1 }), { isFolder: false })
             },
             funProc: async ({ fn, fpSrc, fpTar }, type) => {
                 fsCopyFile(fpSrc, fpTar)

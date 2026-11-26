@@ -42,7 +42,7 @@ describe('sync-nto1', function() {
         let opt = {
             fdFromStorageTempHash: fdHash,
             funGetVfpsSrc: async () => {
-                return filter(fsTreeFolder(fdSrc, 1), { isFolder: false })
+                return filter(fsTreeFolder(fdSrc, { levelLimit: 1 }), { isFolder: false })
             },
             funProc: async (r) => {
                 calls.push(JSON.stringify({

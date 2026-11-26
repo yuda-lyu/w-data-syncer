@@ -68,3 +68,10 @@
 
 - **只有「比對訊息全文後綴」之斷言會紅**:1.9.69 之主鍵為空訊息為 `invalid ltdtNew[0]: primary key must be a non-empty string or a finite number`,1.9.70 改為 `invalid ltdtNew[0]: must have a primary key of a non-empty string or a finite number`(名稱 `ltdtNew[i]`/`ltdtOld[i]` 與前綴 `invalid ` 不變,不帶輸入值).本庫斷言多為只比對前綴 `^invalid ltdtNew\[`/`^invalid ltdtOld\[`(`sfcsv_rows`、`sync-diff-throw`),升版後仍綠;唯一帶後綴者為 `test/sfcsv_rows.test.mjs` 之「只有主鍵空之列」案,升版後紅(86 passing、1 failing),改為依實測訊息之新字面.其餘訊息(缺主鍵欄位、同側主鍵重複)之字面亦已改版,本庫無斷言其後綴.
 - **實測方式**:升版後以暫存腳本呼叫 `wsemi/src/ltdtDiffByKey.mjs` 取各情境之實際 `err.message`,不憑 wsemi 之規格文字推測;`dist/` 與 `docs/dist/` 內之舊字面為打包之 wsemi 舊碼,於發布時重新產製,不手改.
+
+## wsemi 1.9.80 列舉函數第 2 參數由 `levelLimit` 改為 `opt`(2026-11-26,R-FSLEVEL-01)
+
+- **預設由 1 層變為窮舉**:`syncByBuffer` 5 處 `fsTreeFolder` 原皆為第 2 參數 `1`,1.9.80 起數字拋 `invalid opt: must be an object`.唯一之特殊處是 `fsGetFiles` 以 `try { ... } catch (err) {}` 包住 `fsTreeFolder` 並吞掉錯誤:若漏改該處,舊寫法之拋錯被靜默吞掉,回空清單,`hash.json` 變成 `[]` 而不報錯(變異 P1b 實測),故 P1 須有測試而不能只靠「不拋錯」.
+- **測試資料設計**:歷史資料夾內放子層之檔(`deep.txt`、`deeper.txt`)與名稱為「新時間戳+序號」之子資料夾(005),完成狀態區放子資料夾內之檔(名稱為新時間戳+序號 003):窮舉時,序號變 006(P2)、子層資料夾被當不完整歷史而刪(P3)、子層檔被當孤立狀態檔而刪(P4)、子層檔併入儲存區(P5);儲存區另放第 2、3 層之檔,以自訂 `funSyncStorage` 保留之,驗 `hash.json` 只含第 1 層(P1).P2~P5 共用一輪之結果,每個站點之變異各紅其專屬案(P2 變異另紅 P4,因序號改變使狀態檔名稱之配對亦變).
+- **變異做法**:鏡像根(`./tmp/` 下只複製變異版 `src/syncByBuffer.mjs` 與測試檔,不建目錄連結;裸名匯入向上解析至本套件之 `node_modules`);各站點之錨點為「函數名加現行之第 1、第 2 引數」之完整呼叫文字,須恰出現一次,否則整批中止;每站點三種變異(省略第 2 參數、舊寫法數字、`{ levelLimit: 2 }`)加 1 個對照,共 16 次執行皆符合預期.
+- **`dist/` 與 `docs/` 內為發布時打包之舊 wsemi,不手改**,下次發布重新產製.

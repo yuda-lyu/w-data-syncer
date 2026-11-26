@@ -98,3 +98,19 @@
 - 站點全集(盤點指令:`git grep -n "now2strp\|nowms2strp\|genHistName" -- src`):`src/syncByBuffer.mjs` 之 `fdn`(唯一站點;`WDataSyncer.mjs` 之 `by-buffer` 只轉呼叫).
 - 測試:`test/sync-buffer-hist.test.mjs`(同一毫秒多輪各有獨立資料夾與狀態檔、命名格式與序號遞增、`numKeep` 保留最新而非最舊、換毫秒序號歸零且跨秒名稱序等於輪序、第 10 輪起序號補零不亂序、同一毫秒超過 1000 輪拋錯、失敗輪之半成品不混入後續輪、不沿用殘存狀態檔名、升版前 14 碼舊名稱先被淘汰、真實時鐘連跑 5 輪).以 `node:test` 之 `mock.timers`(只 mock `Date`)凍結時鐘以決定性製造同一毫秒.變異(`src` 副本,2026-10-31):M1 退回秒級命名、M2 只有毫秒無序號、M3 序號取首個空位、M4 序號忽略完成狀態檔、M5 序號不補零、M6 無溢位防護、M7 序號不比對毫秒前綴、M8 序號取最後者而非最大者——皆被擊殺.指令:`npm test`.
 - 測試(配對清理):`test/sync-buffer-hist.test.mjs` 之 `describe('pairing cleanup by name set')`(7 案:數量相等而集合不同、保留完整舊輪只清不完整者、資料夾多於狀態檔、狀態檔多於資料夾、不完整夾不得使完整輪被提早淘汰、混入不完整者時 `numKeep` 保留最新完整輪、完整配對不受影響;每案另斷言 `srLog.error` 無紀錄,即沿用含已刪者之舊清單不會走到不存在之資料夾).seed 以 14 碼舊名稱預先建立資料夾與狀態檔,排序上早於新名稱.變異與結果見該輪報告(2026-10-31,變異副本與工具為暫存、用畢即清;新測試全擊殺,動工前測試對還原整檔、`numKeep` 取清理前、清理後不更新清單、數量差閘門四項存活):還原整檔、不刪未完成資料夾、不刪孤立狀態檔、`numKeep` 取清理前資料夾數、清理後不更新清單、數量差閘門、資料夾比對錯用自身集合.
+
+## R-FSLEVEL-01 呼叫 wsemi 列舉函數須明給層數,不依賴預設
+
+- 規則:`fsTreeFolder`、`fsTreeFolderWithHash`、`fsGetFilesInFolder`、`fsGetFilesWithHashInFolder`、`fsGetFoldersInFolder`(含各 `*Core`)之第 2 參數為 `opt` 物件;wsemi 1.9.80 起 `opt.levelLimit` 為有效正整數才限層,**未給即窮舉全部層級**(舊版預設 1 層),第 2 參數給了而非物件(如舊寫法之數字)拋 `invalid opt: must be an object`.本套件之呼叫點一律明給 `{ levelLimit: n }`,不省略第 2 參數;`package.json` 之 `wsemi` 下限為 `^1.9.80`.
+- 語意:`syncByBuffer` 之 5 處列舉皆為第 1 層(歷史資料夾、完成狀態檔、各歷史資料夾內之檔案、儲存區之 hash 計算、歷史名稱序號),不進入子資料夾.
+- 盤點指令:`git grep -nE "\b(fsTreeFolder|fsTreeFolderWithHash|fsGetFilesInFolder|fsGetFilesWithHashInFolder|fsGetFoldersInFolder)(Core)?\s*\(" -- . ':!dist' ':!docs'`;站點全集(2026-11-26):`src/syncByBuffer.mjs` 5 處(P1~P5,見下表)、`test/*.test.mjs` 18 處(測試內以 `fsTreeFolder` 讀取輔助;皆為第 1 層).判準:皆含 `{ levelLimit: 1 }`(P1 為 `{ levelLimit }`,其值只可能為 1)為已套,省略或數字為未套.
+
+| 站點 | 位置 | 層數 | 以何者驗證層數 |
+|---|---|---|---|
+| P1 | `fsGetFiles`(儲存區 hash 計算,`useStorageHash`) | 第 1 層(預設參數 `levelLimit = 1`,唯一呼叫處傳 1) | `hash.json` 只含儲存區第 1 層之檔案 |
+| P2 | `genHistName` 之序號 | 第 1 層 | 子層內含同時間戳前綴之名稱不影響序號(新名稱序號為 000) |
+| P3 | `vfds`(歷史資料夾清單) | 第 1 層,只取資料夾 | 歷史資料夾內之子資料夾與其檔案不被當成不完整歷史而刪除 |
+| P4 | `vfpsState`(完成狀態檔清單) | 第 1 層,只取檔案 | 完成狀態區子資料夾內之檔案不被當成孤立狀態檔而刪除 |
+| P5 | `vfpsHash`(各歷史資料夾內之檔案) | 第 1 層,只取檔案 | 子層之檔案不併入暫存區與儲存區 |
+
+- 測試:`test/sync-buffer-levels.test.mjs`(P1~P5 各 1 案;合成資料之各層檔名互異,序號用 005 與 003 使窮舉時為 006、第 1 層時為 000).變異(鏡像根,2026-11-26,見經驗 R-FSLEVEL-01 一節):5 站點各改為省略第 2 參數、舊寫法數字、`{ levelLimit: 2 }` 共 15 項皆擊殺,對照(不變異)全綠.

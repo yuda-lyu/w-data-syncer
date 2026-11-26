@@ -36,7 +36,7 @@ describe('syncer_nto1', function() {
         let ev = WDataSyncer('by-nto1', {
             fdFromStorageTempHash: fdHash,
             funGetVfpsSrc: async () => {
-                return filter(fsTreeFolder(fdSrc, 1), { isFolder: false })
+                return filter(fsTreeFolder(fdSrc, { levelLimit: 1 }), { isFolder: false })
             },
             funProc: async (r) => {
                 ms.push({ 'proc data': JSON.stringify({ add: map(r.add, 'id'), diff: map(r.diff, 'id'), del: map(r.del, 'id') }) })
